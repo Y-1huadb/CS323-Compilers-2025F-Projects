@@ -14,8 +14,62 @@ grammar Splc;
 
 program: globalDef* EOF;
 
+// ---------- Global Definition ----------
 globalDef
-    : // TODO
+    : specifier Identifier LPAREN funcArgs RPAREN LBRACE statement* RBRACE
+    | specifier varDec SEMI
+    | specifier SEMI
+    ;
+
+// ---------- Specifier ----------
+specifier
+    : INT
+    | CHAR
+    | STRUCT Identifier
+    | STRUCT Identifier LBRACE (specifier varDec SEMI)* RBRACE;
+
+// ---------- Variable Declaration ----------
+varDec
+    : Identifier
+    | varDec LBRACK Number RBRACK
+    | STAR varDec
+    | LPAREN varDec RPAREN;
+
+// ---------- Function Arguments ----------
+funcArgs    : (specifier varDec (COMMA specifier varDec)*)? ;
+
+// ---------- Statement ----------
+statement
+    : LBRACE statement* RBRACE #CodeBlock
+    | specifier varDec (ASSIGN expression)? SEMI #VarDecStmt
+    | IF LPAREN expression RPAREN statement (ELSE statement)? #IfStmt
+    | WHILE LPAREN expression RPAREN statement #WhileStmt
+    | RETURN expression SEMI #ReturnStmt
+    | expression SEMI #ExprStmt;
+
+// ---------- Expression ----------
+expression
+    : LPAREN expression RPAREN
+    | (Number | Char)
+    | Identifier
+    | expression (INC | DEC)
+    | Identifier LPAREN (expression (COMMA expression)*)? RPAREN
+    | expression LBRACK expression RBRACK
+    | expression '.' Identifier
+    | expression '->' Identifier
+    | <assoc=right> (INC | DEC) expression
+    | <assoc=right> (PLUS | MINUS) expression
+    | <assoc=right> NOT expression
+    | <assoc=right> STAR expression
+    | <assoc=right> AMP expression
+    | expression (STAR | DIV | MOD) expression
+    | expression (PLUS | MINUS) expression
+    | expression (LT | LE) expression
+    | expression (GT | GE) expression
+    | expression (EQ | NEQ) expression
+    | expression AND expression
+    | expression OR expression
+    | <assoc=right> expression ASSIGN expression
     ;
 
 // =========================
@@ -65,7 +119,7 @@ RBRACK  : ']';
 
 // ---------- Identifiers & Literals ----------
 Identifier  : [_a-zA-Z][_a-zA-Z0-9]*;
-Number      : '-'?('0' | [1-9][0-9]*);
+Number      : '0' | [1-9][0-9]*;
 Char        : '\'' ( [a-z] | EscapeSequence ) '\'';
 fragment EscapeSequence
             : '\\n'
