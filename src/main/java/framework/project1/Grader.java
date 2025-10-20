@@ -1,6 +1,6 @@
 package framework.project1;
 
-import generated.Splc.Splc;
+import generated.Splc.SplcLexer;
 import org.antlr.v4.runtime.*;
 
 import java.io.*;
@@ -32,7 +32,7 @@ public class Grader {
     public void run() {
         try{
             CharStream input = CharStreams.fromStream(sourceStream);
-            Splc lexer = new Splc(input);
+            SplcLexer lexer = new SplcLexer(input);
             CommonTokenStream tokens = new CommonTokenStream(lexer);
             tokens.fill();
             Vocabulary vocabulary = lexer.getVocabulary();

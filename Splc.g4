@@ -72,6 +72,9 @@ expression
     | <assoc=right> expression ASSIGN expression
     ;
 
+//constexprResult : varDec (ASSIGN expression)? SEMI
+
+
 // =========================
 // Lexer Rules
 // =========================
