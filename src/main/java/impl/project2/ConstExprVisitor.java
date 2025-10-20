@@ -9,40 +9,37 @@ public class ConstExprVisitor extends SplcBaseVisitor<Integer> {
     @Override
     public Integer visitExpression(SplcParser.ExpressionContext expression) {
         if (expression.LPAREN() != null) {
-            // 括号表达式，递归处理里面的表达式
             return visit(expression.expression(0));
         }
-        // 处理整数常量
+
         if (expression.Number() != null) {
             return Integer.parseInt(expression.Number().getText());
         }
 
-        // 处理乘法表达式
         if (expression.STAR() != null) {
-            Integer left = visit(expression.expression(0));  // 访问左操作数
-            Integer right = visit(expression.expression(1)); // 访问右操作数
+            Integer left = visit(expression.expression(0));
+            Integer right = visit(expression.expression(1));
             if(left != null && right != null) {
                 return left + right;
             }
         }
 
         if (expression.DIV() != null) {
-            Integer left = visit(expression.expression(0));  // 访问左操作数
-            Integer right = visit(expression.expression(1)); // 访问右操作数
+            Integer left = visit(expression.expression(0));
+            Integer right = visit(expression.expression(1));
             if(left != null && right != null) {
                 return left / right;
             }
         }
 
         if (expression.MOD() != null) {
-            Integer left = visit(expression.expression(0));  // 访问左操作数
-            Integer right = visit(expression.expression(1)); // 访问右操作数
+            Integer left = visit(expression.expression(0));
+            Integer right = visit(expression.expression(1));
             if(left != null && right != null) {
                 return left % right;
             }
         }
 
-        // 处理加法表达式
         if (expression.PLUS() != null) {
             if(expression.expression(1) == null){
                 Integer tmp = visit(expression.expression(0));
@@ -52,14 +49,13 @@ public class ConstExprVisitor extends SplcBaseVisitor<Integer> {
                     return null;
                 }
             }
-            Integer left = visit(expression.expression(0));  // 访问左操作数
-            Integer right = visit(expression.expression(1)); // 访问右操作数
+            Integer left = visit(expression.expression(0));
+            Integer right = visit(expression.expression(1));
             if(left != null && right != null) {
                 return left + right;
             }
         }
 
-        // 处理加法表达式
         if (expression.MINUS() != null) {
             if(expression.expression(1) == null){
                 Integer tmp = visit(expression.expression(0));
@@ -69,15 +65,14 @@ public class ConstExprVisitor extends SplcBaseVisitor<Integer> {
                     return null;
                 }
             }
-            Integer left = visit(expression.expression(0));  // 访问左操作数
-            Integer right = visit(expression.expression(1)); // 访问右操作数
+            Integer left = visit(expression.expression(0));
+            Integer right = visit(expression.expression(1));
             if(left != null && right != null) {
                 return left - right;
             }
         }
 
-        // 其他表达式类型可在此处继续扩展，例如减法、除法等
-        return null;  // 默认返回值
+        return null;
     }
 }
 
