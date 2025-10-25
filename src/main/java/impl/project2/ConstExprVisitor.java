@@ -20,7 +20,7 @@ public class ConstExprVisitor extends SplcBaseVisitor<Integer> {
             Integer left = visit(expression.expression(0));
             Integer right = visit(expression.expression(1));
             if(left != null && right != null) {
-                return left + right;
+                return left * right;
             }
         }
 
