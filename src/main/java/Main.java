@@ -1,3 +1,5 @@
+package main.java;
+
 import framework.project2.Grader;
 import org.antlr.v4.runtime.*;
 import org.antlr.v4.runtime.tree.*;
@@ -9,7 +11,7 @@ import java.io.InputStream;
 public class Main {
     public static void main(String[] args) throws IOException {
         {
-            InputStream input = new FileInputStream("testcases/project2/correct_testcase_1.splc");
+            InputStream input = new FileInputStream("testcases/project2/correct_testcase_0.splc");
             Grader grader = new Grader(input, System.out, false);
 
             grader.run();
