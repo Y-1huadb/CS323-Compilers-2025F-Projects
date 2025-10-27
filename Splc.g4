@@ -123,7 +123,7 @@ RBRACK  : ']';
 // ---------- Identifiers & Literals ----------
 Identifier  : [_a-zA-Z][_a-zA-Z0-9]*;
 Number      : '0' | [1-9][0-9]*;
-Char        : '\'' ( [a-z] | EscapeSequence ) '\'';
+Char        : '\'' ( [a-zA-Z] | EscapeSequence ) '\'';
 fragment EscapeSequence
             : '\\n'
             | '\\t'
