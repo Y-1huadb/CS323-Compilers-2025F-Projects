@@ -17,6 +17,7 @@ program: globalDef* EOF;
 // ---------- Global Definition ----------
 globalDef
     : specifier Identifier LPAREN funcArgs RPAREN LBRACE statement* RBRACE
+    | specifier Identifier LPAREN funcArgs RPAREN SEMI
     | specifier varDec SEMI
     | specifier SEMI
     ;
