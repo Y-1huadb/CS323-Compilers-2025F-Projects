@@ -9,6 +9,7 @@ import generated.Splc.SplcParser;
 import org.antlr.v4.runtime.CharStream;
 import org.antlr.v4.runtime.CharStreams;
 import org.antlr.v4.runtime.CommonTokenStream;
+import org.antlr.v4.runtime.tree.TerminalNode;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -50,14 +51,14 @@ class ArrayType implements Type {
     }
 }
 class StructType implements Type{
-    String name;
+    TerminalNode identifier;
     Scope scope;
-    StructType(String name, Scope curScope){
-        this.name = name;
+    StructType(TerminalNode identifier, Scope curScope){
+        this.identifier = identifier;
         this.scope = curScope;
     }
-    StructType(String name, List<SplcParser.SpecifierContext> specs, List<SplcParser.VarDecContext> vars, Scope curScope){
-        this.name = name;
+    StructType(TerminalNode identifier, List<SplcParser.SpecifierContext> specs, List<SplcParser.VarDecContext> vars, Scope curScope){
+        this.identifier = identifier;
         this.scope = curScope;
         if(specs.size() != vars.size()){
             return;
@@ -78,31 +79,31 @@ class StructType implements Type{
                 continue;
             }
             if(curSpec.STRUCT() != null && curSpec.LBRACE() == null){
-                VariableSymbol variableSymbol = scope.lookup(curSpec.Identifier().getText());
+                VariableSymbol variableSymbol = scope.lookup(curSpec.Identifier());
                 if(variableSymbol != null){
-                    VariableSymbol variableSymbol1 = new VariableSymbol(curVar.Identifier().getText(), variableSymbol.typeContainer);
+                    VariableSymbol variableSymbol1 = new VariableSymbol(curVar.Identifier(), variableSymbol.typeContainer);
                     scope.define(variableSymbol1);
                 }else {
-                    VariableSymbol incompleteTypeSymbol = new VariableSymbol(curSpec.Identifier().getText(), new TypeContainer(curSpec.Identifier().getText(), new TypeContainer()));
+                    VariableSymbol incompleteTypeSymbol = new VariableSymbol(curSpec.Identifier(), new TypeContainer(curSpec.Identifier(), new TypeContainer()));
                     scope.define(incompleteTypeSymbol);
-                    VariableSymbol variableSymbol1 = new VariableSymbol(curVar.Identifier().getText(), incompleteTypeSymbol.typeContainer);
+                    VariableSymbol variableSymbol1 = new VariableSymbol(curVar.Identifier(), incompleteTypeSymbol.typeContainer);
                     scope.define(variableSymbol1);
                 }
                 continue;
             }
             if(curSpec.STRUCT() != null && curSpec.LBRACE() != null){
-                Scope childScope = new Scope(curScope);
-                StructType structType = new StructType(curSpec.Identifier().getText(), curSpec.specifier(), curSpec.varDec(), childScope);
-                VariableSymbol variableSymbol = new VariableSymbol(curVar.Identifier().getText(), structType);
+                Scope childScope = new Scope(curScope, curScope.grader);
+                StructType structType = new StructType(curSpec.Identifier(), curSpec.specifier(), curSpec.varDec(), childScope);
+                VariableSymbol variableSymbol = new VariableSymbol(curVar.Identifier(), structType);
                 scope.define(variableSymbol);
             }
         }
     }
     @Override
     public String toString(){
-        StringBuilder stringBuilder = new StringBuilder("struct ").append(name).append("{");
+        StringBuilder stringBuilder = new StringBuilder("struct ").append(identifier.getText()).append("{");
         for (VariableSymbol sym : scope.declaredSymbols()) {
-            stringBuilder.append(sym.typeContainer.toString()).append(" ").append(sym.name).append(";");
+            stringBuilder.append(sym.typeContainer.toString()).append(" ").append(sym.identifier.getText()).append(";");
         }
         stringBuilder.append("}");
         return stringBuilder.toString();
@@ -120,42 +121,42 @@ class PointerType implements Type{
 }
 
 class TypeContainer implements Type{
-    String name;
+    TerminalNode identifier;
     Type type;
     boolean incomplete = true;
     public TypeContainer(){}
-    public TypeContainer(String name, Type type){
-        this.name = name;
+    public TypeContainer(TerminalNode identifier, Type type){
+        this.identifier = identifier;
         this.type = type;
         this.incomplete = false;
     }
     public TypeContainer(SplcParser.VarDecContext declarator, Type type){
         TypeContainer typeContainer;
         if(declarator.Identifier() != null){
-            typeContainer = new TypeContainer(declarator.Identifier().getText(), type);
-            this.name = typeContainer.name;
+            typeContainer = new TypeContainer(declarator.Identifier(), type);
+            this.identifier = typeContainer.identifier;
             this.type = typeContainer;
             return;
         }
         if(declarator.LBRACK() != null){
             TypeContainer tmp = new TypeContainer(declarator.varDec(), type);
             ArrayType arrayType = new ArrayType(tmp.type, Integer.parseInt(declarator.Number().getText()));
-            typeContainer = new TypeContainer(tmp.name, arrayType);
-            this.name = typeContainer.name;
+            typeContainer = new TypeContainer(tmp.identifier, arrayType);
+            this.identifier = typeContainer.identifier;
             this.type = typeContainer;
             return;
         }
         if(declarator.STAR() != null){
             TypeContainer tmp = new TypeContainer(declarator.varDec(), type);
             PointerType pointerType = new PointerType(tmp.type);
-            typeContainer = new TypeContainer(tmp.name, pointerType);
-            this.name = typeContainer.name;
+            typeContainer = new TypeContainer(tmp.identifier, pointerType);
+            this.identifier = typeContainer.identifier;
             this.type = typeContainer;
             return;
         }
         if(declarator.LPAREN() != null){
             typeContainer = new TypeContainer(declarator.varDec(), type);
-            this.name = typeContainer.name;
+            this.identifier = typeContainer.identifier;
             this.type = typeContainer;
             return;
         }
@@ -167,57 +168,58 @@ class TypeContainer implements Type{
 }
 
 class VariableSymbol {
-    String name;
+    TerminalNode identifier;
     TypeContainer typeContainer;
-    public VariableSymbol(String name, Type type){
-        TypeContainer typeContainer = new TypeContainer(name, type);
-        this.name = name;
+    public VariableSymbol(TerminalNode identifier, Type type){
+        TypeContainer typeContainer = new TypeContainer(identifier, type);
+        this.identifier = identifier;
         this.typeContainer = typeContainer;
     }
-    public VariableSymbol(String name, TypeContainer typeContainer){
-        this.name = name;
+    public VariableSymbol(TerminalNode identifier, TypeContainer typeContainer){
+        this.identifier = identifier;
         this.typeContainer = typeContainer;
     }
     public VariableSymbol(SplcParser.VarDecContext declarator, Type type) {
         this.typeContainer = new TypeContainer(declarator, type);
-        this.name = this.typeContainer.name;
+        this.identifier = this.typeContainer.identifier;
     }
 
     @Override
     public String toString() {
-        return name + ": " + typeContainer.toString();
+        return identifier.getText()+ ": " + typeContainer.toString();
     }
 }
 
 
 class Scope{
     // Symbols table
-    LinkedHashMap<String, VariableSymbol> symbols = new LinkedHashMap<>();
+    LinkedHashMap<TerminalNode, VariableSymbol> symbols = new LinkedHashMap<>();
+    AbstractGrader grader;
 
     // Parent Scope
     Scope parent;
     //Child Scope;
     ArrayList<Scope> children = new ArrayList<>();
 
-    public Scope(Scope parent) {
+    public Scope(Scope parent, AbstractGrader grader) {
         this.parent = parent;
+        this.grader = grader;
         if(parent != null){
             parent.children.add(this);
         }
     }
 
-    public boolean define(VariableSymbol var){
-        if(symbols.containsKey(var.name)){
-            return false;
+    public void define(VariableSymbol var){
+        if(symbols.containsKey(var.identifier)){
+            grader.reportSemanticError(Project3SemanticError.redefinition(var.identifier));
         }
-        symbols.put(var.name, var);
-        return true;
+        symbols.put(var.identifier, var);
     }
 
-    public VariableSymbol lookup(String name){
-        VariableSymbol sym = symbols.get(name);
+    public VariableSymbol lookup(TerminalNode identifier){
+        VariableSymbol sym = symbols.get(identifier);
         if (sym != null) return sym;
-        if (parent != null) return parent.lookup(name);
+        if (parent != null) return parent.lookup(identifier);
         return null;
     }
 
@@ -247,7 +249,7 @@ public class Compiler extends AbstractCompiler {
             // So it's fine that this code won't compile. You are free to delete all of these code.
             Type curType;
             VariableSymbol curSymbol;
-            Scope scope = new Scope(null);
+            Scope scope = new Scope(null, grader);
             @Override
             public Void visitGlobalDef(SplcParser.GlobalDefContext ctx){
                 var spec = ctx.specifier();
@@ -286,7 +288,7 @@ public class Compiler extends AbstractCompiler {
                 var vars = ctx.varDec();
                 if(vars.isEmpty()){
                     var ident = ctx.Identifier();
-                    curSymbol = scope.lookup(ident.getText());
+                    curSymbol = scope.lookup(ident);
                     if (curSymbol == null){
 //                        grader.reportSemanticError(Project3SemanticError.undeclaredUse(ident));
                     }
