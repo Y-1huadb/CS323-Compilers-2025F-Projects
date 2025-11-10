@@ -52,52 +52,10 @@ class ArrayType implements Type {
 }
 class StructType implements Type{
     TerminalNode identifier;
-    Scope scope;
+    Scope scope; // field scope, may be filled later
     StructType(TerminalNode identifier, Scope curScope){
         this.identifier = identifier;
         this.scope = curScope;
-    }
-    StructType(TerminalNode identifier, List<SplcParser.SpecifierContext> specs, List<SplcParser.VarDecContext> vars, Scope curScope){
-        this.identifier = identifier;
-        this.scope = curScope;
-        if(specs.size() != vars.size()){
-            return;
-        }
-        for (int i = 0; i < specs.size(); i++) {
-            SplcParser.SpecifierContext curSpec = specs.get(i);
-            SplcParser.VarDecContext curVar = vars.get(i);
-            if(curSpec.INT() != null){
-                IntType intType = new IntType();
-                VariableSymbol variableSymbol = new VariableSymbol(curVar.varDec(), intType);
-                scope.define(variableSymbol);
-                continue;
-            }
-            if(curSpec.CHAR() != null){
-                CharType charType = new CharType();
-                VariableSymbol variableSymbol = new VariableSymbol(curVar.varDec(), charType);
-                scope.define(variableSymbol);
-                continue;
-            }
-            if(curSpec.STRUCT() != null && curSpec.LBRACE() == null){
-                VariableSymbol variableSymbol = scope.lookup(curSpec.Identifier());
-                if(variableSymbol != null){
-                    VariableSymbol variableSymbol1 = new VariableSymbol(curVar.Identifier(), variableSymbol.typeContainer);
-                    scope.define(variableSymbol1);
-                }else {
-                    VariableSymbol incompleteTypeSymbol = new VariableSymbol(curSpec.Identifier(), new TypeContainer(curSpec.Identifier(), new TypeContainer()));
-                    scope.define(incompleteTypeSymbol);
-                    VariableSymbol variableSymbol1 = new VariableSymbol(curVar.Identifier(), incompleteTypeSymbol.typeContainer);
-                    scope.define(variableSymbol1);
-                }
-                continue;
-            }
-            if(curSpec.STRUCT() != null && curSpec.LBRACE() != null){
-                Scope childScope = new Scope(curScope, curScope.grader);
-                StructType structType = new StructType(curSpec.Identifier(), curSpec.specifier(), curSpec.varDec(), childScope);
-                VariableSymbol variableSymbol = new VariableSymbol(curVar.Identifier(), structType);
-                scope.define(variableSymbol);
-            }
-        }
     }
     @Override
     public String toString(){
@@ -107,6 +65,22 @@ class StructType implements Type{
         }
         stringBuilder.append("}");
         return stringBuilder.toString();
+    }
+}
+// A reference to a previously declared struct, prints as "struct <name>"
+class StructRefType implements Type{
+    TerminalNode identifier;
+    boolean defined; // whether this tag is fully defined somewhere visible
+    StructRefType(TerminalNode identifier){
+        this.identifier = identifier;
+    }
+    StructRefType(TerminalNode identifier, boolean defined){
+        this.identifier = identifier;
+        this.defined = defined;
+    }
+    @Override
+    public String toString(){
+        return "struct " + identifier.getText();
     }
 }
 class PointerType implements Type{
@@ -191,6 +165,30 @@ class VariableSymbol {
 }
 
 
+class FunctionSymbol {
+    TerminalNode identifier;
+    Type returnType;
+    List<TypeContainer> params = new ArrayList<>();
+    boolean hasBody = false;
+
+    public FunctionSymbol(TerminalNode identifier, Type returnType){
+        this.identifier = identifier;
+        this.returnType = returnType;
+    }
+
+    @Override
+    public String toString(){
+        StringBuilder sb = new StringBuilder();
+        sb.append(identifier.getText()).append(": ").append(returnType.toString()).append("(");
+        for (int i = 0; i < params.size(); i++){
+            if(i > 0) sb.append(',');
+            sb.append(params.get(i).toString());
+        }
+        sb.append(")");
+        return sb.toString();
+    }
+}
+
 class Scope{
     // Symbols table
     LinkedHashMap<TerminalNode, VariableSymbol> symbols = new LinkedHashMap<>();
@@ -233,6 +231,28 @@ public class Compiler extends AbstractCompiler {
         super(grader);
     }
 
+    // Helper to build a Type from a specifier node
+    static Type getTypeFromSpecifier(SplcParser.SpecifierContext ctx, Scope curScope){
+        if(ctx.INT() != null){
+            return new IntType();
+        }
+        if(ctx.CHAR() != null){
+            return new CharType();
+        }
+        if(ctx.STRUCT() != null){
+            if(ctx.LBRACE() != null){
+                // struct definition with fields
+                Scope childScope = new Scope(curScope, curScope.grader);
+                return new StructType(ctx.Identifier(), childScope);
+            }else{
+                // reference to existing struct
+                return new StructRefType(ctx.Identifier());
+            }
+        }
+        // Fallback, should not happen
+        return new PrimitiveType(){};
+    }
+
     @Override
     public void start() throws IOException {
         CharStream input = CharStreams.fromStream(this.grader.getSourceStream());
@@ -243,73 +263,296 @@ public class Compiler extends AbstractCompiler {
         // TODO: XXX
         SplcParser.ProgramContext program = parser.program();
 
+        // Collections for final printing
+        List<VariableSymbol> globalVariables = new ArrayList<>();
+        List<FunctionSymbol> functions = new ArrayList<>();
+        // Name maps for semantic checks at global scope
+        LinkedHashMap<String, VariableSymbol> globalVarMap = new LinkedHashMap<>();
+        LinkedHashMap<String, FunctionSymbol> globalFuncMap = new LinkedHashMap<>();
+
         new SplcBaseVisitor<Void>() {
-            // These are merely examples to show how to create and report a Semantic Error.
-            // The Alternative name (ExprID, VarDecBase, etc.) used here may not be the same as yours.
-            // So it's fine that this code won't compile. You are free to delete all of these code.
-            Type curType;
-            VariableSymbol curSymbol;
             Scope scope = new Scope(null, grader);
+            // function-local scope stack (top is current block)
+            ArrayList<LinkedHashMap<String, VariableSymbol>> varScopeStack = new ArrayList<>();
+            // struct tag namespace scope stack
+            static class TagInfo {
+                boolean defined;
+                TerminalNode token;
+                TagInfo(boolean defined, TerminalNode token){ this.defined = defined; this.token = token; }
+            }
+            ArrayList<LinkedHashMap<String, TagInfo>> tagScopeStack = new ArrayList<>(){{ add(new LinkedHashMap<>()); }};
+
+            private void pushVarScope(){
+                 varScopeStack.add(new LinkedHashMap<>()); 
+            }
+
+            private void popVarScope(){ 
+                if(!varScopeStack.isEmpty()) varScopeStack.remove(varScopeStack.size()-1); 
+            }
+            
+            private LinkedHashMap<String, VariableSymbol> currentVarScope(){
+                return varScopeStack.isEmpty()? null : varScopeStack.get(varScopeStack.size()-1); 
+            }
+
+            private void pushTagScope(){ tagScopeStack.add(new LinkedHashMap<>()); }
+            private void popTagScope(){ if(!tagScopeStack.isEmpty()) tagScopeStack.remove(tagScopeStack.size()-1); }
+            private LinkedHashMap<String, TagInfo> currentTagScope(){ return tagScopeStack.get(tagScopeStack.size()-1); }
+            private TagInfo lookupTag(String name){
+                for(int i=tagScopeStack.size()-1;i>=0;i--){
+                    TagInfo info = tagScopeStack.get(i).get(name);
+                    if(info!=null) return info;
+                }
+                return null;
+            }
+
+            private VariableSymbol lookupVarByName(String name){
+                for(int i = varScopeStack.size()-1; i >= 0; i--){
+                    VariableSymbol vs = varScopeStack.get(i).get(name);
+                    if(vs!=null) return vs;
+                }
+                return globalVarMap.get(name);
+            }
+
+            private void declareLocalVarOrError(VariableSymbol var){
+                LinkedHashMap<String, VariableSymbol> cur = currentVarScope();
+                if(cur == null) return; // not inside body
+                String name = var.identifier.getText();
+                if(cur.containsKey(name)){
+                    grader.reportSemanticError(Project3SemanticError.redefinition(var.identifier));
+                }
+                cur.put(name, var);
+            }
+
+            private void checkUndeclaredIdentifierUse(TerminalNode identifier){
+                String name = identifier.getText();
+                // Treat function identifiers as declared as well
+                if(lookupVarByName(name) == null && !globalFuncMap.containsKey(name)){
+                    grader.reportSemanticError(Project3SemanticError.undeclaredUse(identifier));
+                }
+            }
+
+            private void walkExpr(SplcParser.ExpressionContext ctx){
+                if(ctx == null) return;
+                if(ctx.Identifier() != null && ctx.getChildCount()==1){
+                    checkUndeclaredIdentifierUse(ctx.Identifier());
+                }
+                for(SplcParser.ExpressionContext sub : ctx.expression()){
+                    walkExpr(sub);
+                }
+            }
+
             @Override
             public Void visitGlobalDef(SplcParser.GlobalDefContext ctx){
-                var spec = ctx.specifier();
-//                System.out.println(spec.getText());
-                visitSpecifier(spec);
-                String res = spec.getText();
+                SplcParser.SpecifierContext spec = ctx.specifier();
+                Type baseType = makeType(spec);
                 if(ctx.Identifier() != null){
-                    /*
-                    specifier Identifier LPAREN funcArgs RPAREN LBRACE statement* RBRACE
-                    | specifier Identifier LPAREN funcArgs RPAREN SEMI
-                     */
-                    //TODO
-                }else if(ctx.varDec() != null){
-                    //TODO
-                    /* specifier varDec SEMI */
-                    System.out.println(1);
+                    /* specifier Identifier LPAREN funcArgs RPAREN LBRACE statement* RBRACE */
+                    FunctionSymbol fun = new FunctionSymbol(ctx.Identifier(), baseType);
+                    SplcParser.FuncArgsContext fa = ctx.funcArgs();
+                    if(fa != null){
+                        List<SplcParser.SpecifierContext> specs = fa.specifier();
+                        List<SplcParser.VarDecContext> vds = fa.varDec();
+                        for(int i = 0; i < specs.size() && i < vds.size(); i++){
+                            Type pBase = makeType(specs.get(i));
+                            TypeContainer pType = new TypeContainer(vds.get(i), pBase);
+                            fun.params.add(pType);
+                        }
+                    }
+                    String name = ctx.Identifier().getText();
+                    boolean hasBody = ctx.LBRACE()!=null;
+                    fun.hasBody = hasBody;
+                    FunctionSymbol existed = globalFuncMap.get(name);
+                    if(existed != null){
+                        if(existed.hasBody && hasBody){
+                            grader.reportSemanticError(Project3SemanticError.redefinition(ctx.Identifier()));
+                        }
+                        if(!existed.hasBody && hasBody){
+                            existed.hasBody = true;
+                            existed.returnType = fun.returnType;
+                            existed.params = fun.params;
+                        }
+                        // both declarations (no body): allowed, do nothing
+                    } else {
+                        if(globalVarMap.containsKey(name)){
+                            grader.reportSemanticError(Project3SemanticError.redeclaration(ctx.Identifier()));
+                        }
+                        globalFuncMap.put(name, fun);
+                        functions.add(fun);
+                    }
 
-
+                    if(ctx.LBRACE()!=null){
+                        pushVarScope();
+                        pushTagScope();
+                        // parameters
+                        if(fa!=null){
+                            List<SplcParser.VarDecContext> vds = fa.varDec();
+                            List<SplcParser.SpecifierContext> specs = fa.specifier();
+                            for(int i=0;i<vds.size() && i<specs.size();i++){
+                                Type pBase = makeType(specs.get(i));
+                                VariableSymbol paramSym = new VariableSymbol(vds.get(i), pBase);
+                                declareLocalVarOrError(paramSym);
+                            }
+                        }
+                        for(SplcParser.StatementContext st : ctx.statement()){ visit(st); }
+                        popTagScope();
+                        popVarScope();
+                    }
+                }else if(ctx.varDec()!=null){
+                    VariableSymbol var = new VariableSymbol(ctx.varDec(), baseType);
+                    String name = var.identifier.getText();
+                    if(globalVarMap.containsKey(name)){
+                        grader.reportSemanticError(Project3SemanticError.redefinition(var.identifier));
+                    }
+                    if(globalFuncMap.containsKey(name)){
+                        grader.reportSemanticError(Project3SemanticError.redeclaration(var.identifier));
+                    }
+                    // definitionIncomplete: value of incomplete struct (pointer allowed)
+                    StructRefType inc = findFirstIncompleteStructRef(var.typeContainer.type);
+                    if(inc != null){
+                        grader.reportSemanticError(Project3SemanticError.definitionIncomplete(inc.identifier));
+                    }
+                    globalVarMap.put(name, var);
+                    globalVariables.add(var);
                 }else{
-                    //TODO
-                    /* specifier SEMI  */
+                    // specifier SEMI (e.g., struct forward declaration or definition-only)
+                    if(spec != null && spec.STRUCT()!=null && spec.LBRACE()==null){
+                        String tag = spec.Identifier().getText();
+                        currentTagScope().putIfAbsent(tag, new TagInfo(false, spec.Identifier()));
+                    }
                 }
-//                visitChildren(ctx);
+                return null;
+            }
+
+            @Override
+            public Void visitCodeBlock(SplcParser.CodeBlockContext ctx){
+                pushVarScope();
+                pushTagScope();
+                for(SplcParser.StatementContext st : ctx.statement()){ visit(st); }
+                popTagScope();
+                popVarScope();
                 return null;
             }
             @Override
-            public Void visitSpecifier(SplcParser.SpecifierContext ctx){
-                if(ctx.INT() != null){
-                    curType = new IntType();
-                    return null;
+            public Void visitVarDecStmt(SplcParser.VarDecStmtContext ctx){
+                Type base = makeType(ctx.specifier());
+                VariableSymbol var = new VariableSymbol(ctx.varDec(), base);
+                declareLocalVarOrError(var);
+                StructRefType inc = findFirstIncompleteStructRef(var.typeContainer.type);
+                if(inc != null){
+                    grader.reportSemanticError(Project3SemanticError.definitionIncomplete(inc.identifier));
                 }
-                if(ctx.CHAR() != null){
-                    curType = new CharType();
-                    return null;
-                }
-                var vars = ctx.varDec();
-                if(vars.isEmpty()){
-                    var ident = ctx.Identifier();
-                    curSymbol = scope.lookup(ident);
-                    if (curSymbol == null){
-//                        grader.reportSemanticError(Project3SemanticError.undeclaredUse(ident));
-                    }
-                    return null;
-                }else {
-                    System.out.println(vars.getFirst().getClass().getName());
-                    return null;
-                }
+                if(ctx.expression()!=null) walkExpr(ctx.expression());
+                return null;
             }
             @Override
-            public Void visitVarDec(SplcParser.VarDecContext ctx){
-                System.out.println(2);
+            public Void visitIfStmt(SplcParser.IfStmtContext ctx){
+                walkExpr(ctx.expression());
+                visit(ctx.statement(0));
+                if(ctx.statement().size()>1) visit(ctx.statement(1));
+                return null;
+            }
+            @Override
+            public Void visitWhileStmt(SplcParser.WhileStmtContext ctx){
+                walkExpr(ctx.expression());
+                visit(ctx.statement());
+                return null;
+            }
+            @Override
+            public Void visitReturnStmt(SplcParser.ReturnStmtContext ctx){
+                walkExpr(ctx.expression());
+                return null;
+            }
+            @Override
+            public Void visitExprStmt(SplcParser.ExprStmtContext ctx){
+                walkExpr(ctx.expression());
+                return null;
+            }
+
+            // Build Type with struct tag namespace & member checks
+            private Type makeType(SplcParser.SpecifierContext ctx){
+                if(ctx == null) return new PrimitiveType(){};
+                if(ctx.INT()!=null) return new IntType();
+                if(ctx.CHAR()!=null) return new CharType();
+                if(ctx.STRUCT()!=null){
+                    TerminalNode tag = ctx.Identifier();
+                    if(ctx.LBRACE()!=null){
+                        // struct definition in current scope
+                        LinkedHashMap<String, TagInfo> cur = currentTagScope();
+                        TagInfo exist = cur.get(tag.getText());
+                        if(exist!=null && exist.defined){
+                            grader.reportSemanticError(Project3SemanticError.redefinition(tag));
+                        }
+                        // mark as not yet defined to allow self-pointer
+                        cur.put(tag.getText(), new TagInfo(false, tag));
+
+                        Scope fieldScope = new Scope(scope, grader);
+                        StructType st = new StructType(tag, fieldScope);
+                        // build members
+                        List<SplcParser.SpecifierContext> specs = ctx.specifier();
+                        List<SplcParser.VarDecContext> vds = ctx.varDec();
+                        LinkedHashMap<String, Boolean> memberNames = new LinkedHashMap<>();
+                        for(int i=0;i<specs.size() && i<vds.size();i++){
+                            SplcParser.VarDecContext vd = vds.get(i);
+                            TerminalNode memId = vd.Identifier();
+                            if(memId==null) continue;
+                            String memName = memId.getText();
+                            if(memberNames.containsKey(memName)){
+                                grader.reportSemanticError(Project3SemanticError.memberDuplicate(memId));
+                            }
+                            Type mBase = makeType(specs.get(i));
+                            VariableSymbol vs = new VariableSymbol(vd, mBase);
+                            // member incomplete (non-pointer value of incomplete struct)
+                            StructRefType inc = findFirstIncompleteStructRef(vs.typeContainer.type);
+                            if(inc != null){
+                                grader.reportSemanticError(Project3SemanticError.memberIncomplete(memId));
+                            }
+                            fieldScope.symbols.put(vs.identifier, vs);
+                            memberNames.put(memName, true);
+                        }
+                        // finish definition
+                        cur.put(tag.getText(), new TagInfo(true, tag));
+                        return st;
+                    } else {
+                        TagInfo info = lookupTag(tag.getText());
+                        boolean defined = info!=null && info.defined;
+                        return new StructRefType(tag, defined);
+                    }
+                }
+                return new PrimitiveType(){};
+            }
+
+            // Find first incomplete struct reference in a value type (pointer exempt)
+            private StructRefType findFirstIncompleteStructRef(Type type){
+                if(type instanceof TypeContainer tc){
+                    return findFirstIncompleteStructRef(tc.type);
+                }
+                if(type instanceof PointerType){
+                    return null; // pointer allowed
+                }
+                if(type instanceof ArrayType at){
+                    return findFirstIncompleteStructRef(at.type);
+                }
+                if(type instanceof StructRefType srt){
+                    if(!srt.defined) return srt;
+                    return null;
+                }
+                if(type instanceof StructType){
+                    return null; // complete type
+                }
                 return null;
             }
         }.visit(program);
 
         grader.print("Variables:\n");
-
+        for(VariableSymbol v : globalVariables){
+            grader.print(v.toString()+"\n");
+        }
 
         grader.print("\n");
 
         grader.print("Functions:\n");
+        for(FunctionSymbol f : functions){
+            grader.print(f.toString()+"\n");
+        }
     }
 }

@@ -1,3 +1,4 @@
-int main() {
-    y = 123;
-}
+struct b;
+struct a{
+    struct b a;
+};
