@@ -57,6 +57,48 @@ class StructType implements Type{
         this.identifier = identifier;
         this.scope = curScope;
     }
+    StructType(TerminalNode identifier, List<SplcParser.SpecifierContext> specs, List<SplcParser.VarDecContext> vars, Scope curScope){
+        this.identifier = identifier;
+        this.scope = curScope;
+        if(specs.size() != vars.size()){
+            return;
+        }
+        for (int i = 0; i < specs.size(); i++) {
+            SplcParser.SpecifierContext curSpec = specs.get(i);
+            SplcParser.VarDecContext curVar = vars.get(i);
+            if(curSpec.INT() != null){
+                IntType intType = new IntType();
+                VariableSymbol variableSymbol = new VariableSymbol(curVar.varDec(), intType);
+                scope.define(variableSymbol);
+                continue;
+            }
+            if(curSpec.CHAR() != null){
+                CharType charType = new CharType();
+                VariableSymbol variableSymbol = new VariableSymbol(curVar.varDec(), charType);
+                scope.define(variableSymbol);
+                continue;
+            }
+            if(curSpec.STRUCT() != null && curSpec.LBRACE() == null){
+                VariableSymbol variableSymbol = scope.lookup(curSpec.Identifier());
+                if(variableSymbol != null){
+                    VariableSymbol variableSymbol1 = new VariableSymbol(curVar.Identifier(), variableSymbol.typeContainer);
+                    scope.define(variableSymbol1);
+                }else {
+                    VariableSymbol incompleteTypeSymbol = new VariableSymbol(curSpec.Identifier(), new TypeContainer(curSpec.Identifier(), new TypeContainer()));
+                    scope.define(incompleteTypeSymbol);
+                    VariableSymbol variableSymbol1 = new VariableSymbol(curVar.Identifier(), incompleteTypeSymbol.typeContainer);
+                    scope.define(variableSymbol1);
+                }
+                continue;
+            }
+            if(curSpec.STRUCT() != null && curSpec.LBRACE() != null){
+                Scope childScope = new Scope(curScope, curScope.grader);
+                StructType structType = new StructType(curSpec.Identifier(), curSpec.specifier(), curSpec.varDec(), childScope);
+                VariableSymbol variableSymbol = new VariableSymbol(curVar.Identifier(), structType);
+                scope.define(variableSymbol);
+            }
+        }
+    }
     @Override
     public String toString(){
         StringBuilder stringBuilder = new StringBuilder("struct ").append(identifier.getText()).append("{");
