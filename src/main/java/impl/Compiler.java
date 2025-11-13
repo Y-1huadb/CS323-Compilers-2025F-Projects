@@ -3,6 +3,7 @@ package impl;
 import framework.AbstractCompiler;
 import framework.AbstractGrader;
 import framework.project3.Project3SemanticError;
+import framework.lang.Type;
 import generated.Splc.SplcBaseVisitor;
 import generated.Splc.SplcLexer;
 import generated.Splc.SplcParser;
@@ -16,9 +17,6 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 
-interface Type {
-    String toString();
-}
 abstract class PrimitiveType implements Type{
     @Override
     public String toString(){
@@ -28,13 +26,13 @@ abstract class PrimitiveType implements Type{
 }
 class IntType extends PrimitiveType{
     @Override
-    public String toString(){
+    public String prettyPrint(){
         return "int";
     }
 }
 class CharType extends PrimitiveType{
     @Override
-    public String toString(){
+    public String prettyPrint(){
         return "char";
     }
 }
@@ -45,9 +43,10 @@ class ArrayType implements Type {
         this.type = type;
         this.length = length;
     }
+    
     @Override
-    public String toString(){
-        return this.type.toString() + "["+this.length+"]";
+    public String prettyPrint(){
+        return this.type.prettyPrint() + "["+this.length+"]";
     }
 }
 class StructType implements Type{
@@ -100,13 +99,17 @@ class StructType implements Type{
         }
     }
     @Override
-    public String toString(){
+    public String prettyPrint(){
         StringBuilder stringBuilder = new StringBuilder("struct ").append(identifier.getText()).append("{");
         for (VariableSymbol sym : scope.declaredSymbols()) {
-            stringBuilder.append(sym.typeContainer.toString()).append(" ").append(sym.identifier.getText()).append(";");
+            stringBuilder.append(sym.typeContainer.prettyPrint()).append(" ").append(sym.identifier.getText()).append(";");
         }
         stringBuilder.append("}");
         return stringBuilder.toString();
+    }
+    @Override
+    public String fullPrint(){
+        return prettyPrint();
     }
 }
 // A reference to a previously declared struct, prints as "struct <name>"
@@ -121,7 +124,7 @@ class StructRefType implements Type{
         this.defined = defined;
     }
     @Override
-    public String toString(){
+    public String prettyPrint(){
         return "struct " + identifier.getText();
     }
 }
@@ -131,8 +134,8 @@ class PointerType implements Type{
         this.type = type;
     }
     @Override
-    public String toString() {
-        return this.type.toString()+"*";
+    public String prettyPrint() {
+        return this.type.prettyPrint()+"*";
     }
 }
 
@@ -178,8 +181,8 @@ class TypeContainer implements Type{
         }
     }
     @Override
-    public String toString(){
-        return type.toString();
+    public String prettyPrint(){
+        return type.prettyPrint();
     }
 }
 
@@ -201,8 +204,8 @@ class VariableSymbol {
     }
 
     @Override
-    public String toString() {
-        return identifier.getText()+ ": " + typeContainer.toString();
+    public String prettyPrint() {
+        return identifier.getText()+ ": " + typeContainer.prettyPrint();
     }
 }
 
@@ -219,12 +222,12 @@ class FunctionSymbol {
     }
 
     @Override
-    public String toString(){
+    public String prettyPrint(){
         StringBuilder sb = new StringBuilder();
-        sb.append(identifier.getText()).append(": ").append(returnType.toString()).append("(");
+        sb.append(identifier.getText()).append(": ").append(returnType.prettyPrint()).append("(");
         for (int i = 0; i < params.size(); i++){
             if(i > 0) sb.append(',');
-            sb.append(params.get(i).toString());
+            sb.append(params.get(i).prettyPrint());
         }
         sb.append(")");
         return sb.toString();
