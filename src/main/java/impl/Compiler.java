@@ -19,7 +19,7 @@ import java.util.List;
 
 abstract class PrimitiveType implements Type{
     @Override
-    public String toString(){
+    public String prettyPrint(){
         return "Primitive Type";
     }
 
@@ -100,16 +100,23 @@ class StructType implements Type{
     }
     @Override
     public String prettyPrint(){
-        StringBuilder stringBuilder = new StringBuilder("struct ").append(identifier.getText()).append("{");
-        for (VariableSymbol sym : scope.declaredSymbols()) {
-            stringBuilder.append(sym.typeContainer.prettyPrint()).append(" ").append(sym.identifier.getText()).append(";");
-        }
-        stringBuilder.append("}");
-        return stringBuilder.toString();
+        // For structure types, prettyPrint only prints the tag name per spec: "struct T"
+        return "struct " + identifier.getText();
     }
     @Override
     public String fullPrint(){
-        return prettyPrint();
+        // Full print includes member list: struct T{T1 M1;...;Tn Mn;}
+        StringBuilder sb = new StringBuilder("struct ").append(identifier.getText()).append("{");
+        if(scope != null){
+            for(VariableSymbol sym : scope.declaredSymbols()){
+                sb.append(sym.typeContainer.prettyPrint())
+                  .append(" ")
+                  .append(sym.identifier.getText())
+                  .append(";");
+            }
+        }
+        sb.append("}");
+        return sb.toString();
     }
 }
 // A reference to a previously declared struct, prints as "struct <name>"
@@ -182,6 +189,16 @@ class TypeContainer implements Type{
     }
     @Override
     public String prettyPrint(){
+        // 展开递归直到拿到最外层有效类型（非 TypeContainer）
+        Type effective = type;
+        while(effective instanceof TypeContainer tc){
+            effective = tc.type;
+        }
+        // 若最外层就是结构体（非派生：不是数组/指针包装），则使用 fullPrint 展开成员。
+        if(effective instanceof StructType){
+            return ((StructType) effective).fullPrint();
+        }
+        // 其他情况保持原有的递归 prettyPrint（由内部各类型自行处理派生形式）
         return type.prettyPrint();
     }
 }
@@ -203,9 +220,12 @@ class VariableSymbol {
         this.identifier = this.typeContainer.identifier;
     }
 
-    @Override
     public String prettyPrint() {
         return identifier.getText()+ ": " + typeContainer.prettyPrint();
+    }
+    @Override
+    public String toString(){
+        return prettyPrint();
     }
 }
 
@@ -221,7 +241,6 @@ class FunctionSymbol {
         this.returnType = returnType;
     }
 
-    @Override
     public String prettyPrint(){
         StringBuilder sb = new StringBuilder();
         sb.append(identifier.getText()).append(": ").append(returnType.prettyPrint()).append("(");
@@ -231,6 +250,10 @@ class FunctionSymbol {
         }
         sb.append(")");
         return sb.toString();
+    }
+    @Override
+    public String toString(){
+        return prettyPrint();
     }
 }
 
@@ -590,14 +613,14 @@ public class Compiler extends AbstractCompiler {
 
         grader.print("Variables:\n");
         for(VariableSymbol v : globalVariables){
-            grader.print(v.toString()+"\n");
+            grader.print(v.prettyPrint()+"\n");
         }
 
         grader.print("\n");
 
         grader.print("Functions:\n");
         for(FunctionSymbol f : functions){
-            grader.print(f.toString()+"\n");
+            grader.print(f.prettyPrint()+"\n");
         }
     }
 }

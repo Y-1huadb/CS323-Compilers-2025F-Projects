@@ -9,6 +9,7 @@ v2: int[123]*
 v3: int*[123]*
 v4: int***[123]*
 v5: int*[345]**[123]*
+v6: int*[56]**[34]***[12]**
 
 Functions:
 main: int(int,int[1])
