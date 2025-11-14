@@ -158,30 +158,39 @@ class TypeContainer implements Type{
     }
     public TypeContainer(SplcParser.VarDecContext declarator, Type type){
         TypeContainer typeContainer;
+        System.out.println(declarator.getText());
+        System.out.println(declarator.LPAREN() != null);
+        System.out.println(type.toString());
         if(declarator.Identifier() != null){
             typeContainer = new TypeContainer(declarator.Identifier(), type);
             this.identifier = typeContainer.identifier;
             this.type = typeContainer;
             return;
         }
-        if(declarator.LBRACK() != null){
-            TypeContainer tmp = new TypeContainer(declarator.varDec(), type);
-            ArrayType arrayType = new ArrayType(tmp.type, Integer.parseInt(declarator.Number().getText()));
-            typeContainer = new TypeContainer(tmp.identifier, arrayType);
+        if(declarator.LPAREN() != null){
+            typeContainer = new TypeContainer(declarator.varDec(), type);
             this.identifier = typeContainer.identifier;
             this.type = typeContainer;
             return;
         }
         if(declarator.STAR() != null){
-            TypeContainer tmp = new TypeContainer(declarator.varDec(), type);
-            PointerType pointerType = new PointerType(tmp.type);
-            typeContainer = new TypeContainer(tmp.identifier, pointerType);
+            PointerType pointerType = new PointerType(type);
+            typeContainer = new TypeContainer(declarator.varDec(), pointerType);
             this.identifier = typeContainer.identifier;
             this.type = typeContainer;
             return;
         }
-        if(declarator.LPAREN() != null){
-            typeContainer = new TypeContainer(declarator.varDec(), type);
+        if(declarator.LBRACK() != null){
+            if(declarator.varDec().LPAREN() != null){
+                ArrayType arrayType = new ArrayType(type, Integer.parseInt(declarator.Number().getText()));
+                typeContainer = new TypeContainer(declarator.varDec(), arrayType);
+                this.identifier = typeContainer.identifier;
+                this.type = typeContainer;
+                return;
+            }
+            TypeContainer tmp = new TypeContainer(declarator.varDec(), type);
+            ArrayType arrayType = new ArrayType(tmp.type, Integer.parseInt(declarator.Number().getText()));
+            typeContainer = new TypeContainer(tmp.identifier, arrayType);
             this.identifier = typeContainer.identifier;
             this.type = typeContainer;
             return;
@@ -538,6 +547,7 @@ public class Compiler extends AbstractCompiler {
 
             // Build Type with struct tag namespace & member checks
             private Type makeType(SplcParser.SpecifierContext ctx){
+                System.out.println(ctx.getText());
                 if(ctx == null) return new PrimitiveType(){};
                 if(ctx.INT()!=null) return new IntType();
                 if(ctx.CHAR()!=null) return new CharType();
@@ -546,13 +556,14 @@ public class Compiler extends AbstractCompiler {
                     if(ctx.LBRACE()!=null){
                         // struct definition in current scope
                         LinkedHashMap<String, TagInfo> cur = currentTagScope();
+                        // TODO: Check TagInfo exist = cur.get(tag.getText());
                         TagInfo exist = cur.get(tag.getText());
                         if(exist!=null && exist.defined){
                             grader.reportSemanticError(Project3SemanticError.redefinition(tag));
                         }
                         // mark as not yet defined to allow self-pointer
                         cur.put(tag.getText(), new TagInfo(false, tag));
-
+                        // TODO: Check Here scope?
                         Scope fieldScope = new Scope(scope, grader);
                         StructType st = new StructType(tag, fieldScope);
                         // build members

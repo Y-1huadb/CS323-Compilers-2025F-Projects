@@ -1,17 +1,1 @@
-int a;
-char b;
-
-struct s0 {
-    char *c[123];
-};
-
-struct s0 s0a;
-
-
-struct qwq {
-    struct qwq *ptr;
-} d[123];
-
-int v0[123];
-int *v1[123];
-int (*v2)[123];
+int (*v1);
