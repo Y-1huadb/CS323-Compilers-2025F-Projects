@@ -52,6 +52,7 @@ class ArrayType implements Type {
 class StructType implements Type{
     TerminalNode identifier;
     Scope scope; // field scope, may be filled later
+    boolean preetyPrint = true;
     StructType(TerminalNode identifier, Scope curScope){
         this.identifier = identifier;
         this.scope = curScope;
@@ -205,7 +206,7 @@ class TypeContainer implements Type{
         }
         // 若最外层就是结构体（非派生：不是数组/指针包装），则使用 fullPrint 展开成员。
         if(effective instanceof StructType){
-            return ((StructType) effective).fullPrint();
+            return ((StructType) effective).prettyPrint();
         }
         // 其他情况保持原有的递归 prettyPrint（由内部各类型自行处理派生形式）
         return type.prettyPrint();
@@ -572,14 +573,14 @@ public class Compiler extends AbstractCompiler {
                         LinkedHashMap<String, Boolean> memberNames = new LinkedHashMap<>();
                         for(int i=0;i<specs.size() && i<vds.size();i++){
                             SplcParser.VarDecContext vd = vds.get(i);
-                            TerminalNode memId = vd.Identifier();
+                            Type mBase = makeType(specs.get(i));
+                            VariableSymbol vs = new VariableSymbol(vd, mBase);
+                            TerminalNode memId = vs.typeContainer.identifier;
                             if(memId==null) continue;
                             String memName = memId.getText();
                             if(memberNames.containsKey(memName)){
                                 grader.reportSemanticError(Project3SemanticError.memberDuplicate(memId));
                             }
-                            Type mBase = makeType(specs.get(i));
-                            VariableSymbol vs = new VariableSymbol(vd, mBase);
                             // member incomplete (non-pointer value of incomplete struct)
                             StructRefType inc = findFirstIncompleteStructRef(vs.typeContainer.type);
                             if(inc != null){

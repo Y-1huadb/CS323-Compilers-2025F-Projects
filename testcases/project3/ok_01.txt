@@ -1,3 +1,2 @@
-v0: int[123]
-v1: int*[123]
-v2: int[123]*
+d: struct qwq[123]
+s0a: struct s0{struct s0* p;char*[123] c;}
