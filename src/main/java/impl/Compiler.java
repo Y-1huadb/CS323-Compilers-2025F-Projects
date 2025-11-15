@@ -159,9 +159,9 @@ class TypeContainer implements Type{
     }
     public TypeContainer(SplcParser.VarDecContext declarator, Type type){
         TypeContainer typeContainer;
-        System.out.println(declarator.getText());
-        System.out.println(declarator.LPAREN() != null);
-        System.out.println(type.toString());
+        //System.out.println(declarator.getText());
+        //System.out.println(declarator.LPAREN() != null);
+        //System.out.println(type.toString());
         if(declarator.Identifier() != null){
             typeContainer = new TypeContainer(declarator.Identifier(), type);
             this.identifier = typeContainer.identifier;
@@ -551,7 +551,7 @@ public class Compiler extends AbstractCompiler {
 
             // Build Type with struct tag namespace & member checks
             private Type makeType(SplcParser.SpecifierContext ctx){
-                System.out.println(ctx.getText());
+                //System.out.println(ctx.getText());
                 if(ctx == null) return new PrimitiveType(){};
                 if(ctx.INT()!=null) return new IntType();
                 if(ctx.CHAR()!=null) return new CharType();
