@@ -199,16 +199,6 @@ class TypeContainer implements Type{
     }
     @Override
     public String prettyPrint(){
-        // 展开递归直到拿到最外层有效类型（非 TypeContainer）
-        Type effective = type;
-        while(effective instanceof TypeContainer tc){
-            effective = tc.type;
-        }
-        // 若最外层就是结构体（非派生：不是数组/指针包装），则使用 fullPrint 展开成员。
-        if(effective instanceof StructType){
-            return ((StructType) effective).prettyPrint();
-        }
-        // 其他情况保持原有的递归 prettyPrint（由内部各类型自行处理派生形式）
         return type.prettyPrint();
     }
 }
@@ -231,7 +221,18 @@ class VariableSymbol {
     }
 
     public String prettyPrint() {
-        return identifier.getText()+ ": " + typeContainer.prettyPrint();
+        // 解开 TypeContainer 包装，若顶层有效类型为 StructType（非派生），使用 fullPrint
+        Type t = typeContainer.type;
+        while(t instanceof TypeContainer tc){
+            t = tc.type;
+        }
+        String rendered;
+        if(t instanceof StructType st){
+            rendered = st.fullPrint();
+        } else {
+            rendered = typeContainer.prettyPrint();
+        }
+        return identifier.getText()+ ": " + rendered;
     }
     @Override
     public String toString(){
@@ -356,7 +357,9 @@ public class Compiler extends AbstractCompiler {
             static class TagInfo {
                 boolean defined;
                 TerminalNode token;
+                StructType structType; // 若已定义，指向对应的 StructType 实例
                 TagInfo(boolean defined, TerminalNode token){ this.defined = defined; this.token = token; }
+                TagInfo(boolean defined, TerminalNode token, StructType structType){ this.defined = defined; this.token = token; this.structType = structType; }
             }
             ArrayList<LinkedHashMap<String, TagInfo>> tagScopeStack = new ArrayList<>(){{ add(new LinkedHashMap<>()); }};
 
@@ -590,10 +593,14 @@ public class Compiler extends AbstractCompiler {
                             memberNames.put(memName, true);
                         }
                         // finish definition
-                        cur.put(tag.getText(), new TagInfo(true, tag));
+                        cur.put(tag.getText(), new TagInfo(true, tag, st));
                         return st;
                     } else {
                         TagInfo info = lookupTag(tag.getText());
+                        if(info != null && info.defined && info.structType != null){
+                            // 已定义的结构体，返回完整 StructType 以便后续 fullPrint
+                            return info.structType;
+                        }
                         boolean defined = info!=null && info.defined;
                         return new StructRefType(tag, defined);
                     }
