@@ -1,6 +1,4 @@
 ### CS323 Template ###
-testcases/
-
 #### Ignore generated ####
 out/
 output/
@@ -14,6 +12,7 @@ target/
 !.mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/
+testcases/
 
 ### IntelliJ IDEA ###
 .idea/modules.xml
