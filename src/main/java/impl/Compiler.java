@@ -601,7 +601,9 @@ public class Compiler extends AbstractCompiler {
                         }
                         cur.put(tag.getText(), new TagInfo(false, tag));
                         definingTags.add(tag.getText());
-
+                        // Create a new tag scope for member declarations so that tags inside
+                        // this struct body do not clash with outer file-scope tags.
+                        pushTagScope();
                         Scope fieldScope = new Scope(scope, grader);
                         StructType st = new StructType(tag, fieldScope);
                         // build members
@@ -627,6 +629,7 @@ public class Compiler extends AbstractCompiler {
                             memberNames.put(memName, true);
                         }
                         // finish definition
+                        popTagScope();
                         cur.put(tag.getText(), new TagInfo(true, tag, st));
                         definingTags.remove(tag.getText());
                         return st;
