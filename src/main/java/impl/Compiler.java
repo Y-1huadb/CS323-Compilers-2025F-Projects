@@ -15,6 +15,7 @@ import org.antlr.v4.runtime.tree.TerminalNode;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.HashSet;
 import java.util.List;
 
 abstract class PrimitiveType implements Type{
@@ -362,6 +363,10 @@ public class Compiler extends AbstractCompiler {
                 TagInfo(boolean defined, TerminalNode token, StructType structType){ this.defined = defined; this.token = token; this.structType = structType; }
             }
             ArrayList<LinkedHashMap<String, TagInfo>> tagScopeStack = new ArrayList<>(){{ add(new LinkedHashMap<>()); }};
+            // Track tags currently being defined (complete definitions) to catch redeclaration inside member lists
+            HashSet<String> definingTags = new HashSet<>();
+            // Defer global non-array incomplete struct value checks until end of translation unit
+            ArrayList<StructRefType> pendingGlobalIncompletes = new ArrayList<>();
 
             private void pushVarScope(){
                  varScopeStack.add(new LinkedHashMap<>()); 
@@ -417,6 +422,11 @@ public class Compiler extends AbstractCompiler {
                 if(ctx.Identifier() != null && ctx.getChildCount()==1){
                     checkUndeclaredIdentifierUse(ctx.Identifier());
                 }
+                try{
+                    if(ctx.Identifier() != null && ctx.LPAREN() != null){
+                        checkUndeclaredIdentifierUse(ctx.Identifier());
+                    }
+                }catch(Throwable ignored){}
                 for(SplcParser.ExpressionContext sub : ctx.expression()){
                     walkExpr(sub);
                 }
@@ -433,9 +443,17 @@ public class Compiler extends AbstractCompiler {
                     if(fa != null){
                         List<SplcParser.SpecifierContext> specs = fa.specifier();
                         List<SplcParser.VarDecContext> vds = fa.varDec();
+                        LinkedHashMap<String, Boolean> seenParams = new LinkedHashMap<>();
                         for(int i = 0; i < specs.size() && i < vds.size(); i++){
                             Type pBase = makeType(specs.get(i));
                             TypeContainer pType = new TypeContainer(vds.get(i), pBase);
+                            if(pType.identifier != null){
+                                String pname = pType.identifier.getText();
+                                if(seenParams.containsKey(pname)){
+                                    grader.reportSemanticError(Project3SemanticError.redefinition(pType.identifier));
+                                }
+                                seenParams.put(pname, true);
+                            }
                             fun.params.add(pType);
                         }
                     }
@@ -444,6 +462,9 @@ public class Compiler extends AbstractCompiler {
                     fun.hasBody = hasBody;
                     FunctionSymbol existed = globalFuncMap.get(name);
                     if(existed != null){
+                        if(existed.hasBody && !hasBody){
+                            grader.reportSemanticError(Project3SemanticError.redeclaration(ctx.Identifier()));
+                        }
                         if(existed.hasBody && hasBody){
                             grader.reportSemanticError(Project3SemanticError.redefinition(ctx.Identifier()));
                         }
@@ -452,10 +473,16 @@ public class Compiler extends AbstractCompiler {
                             existed.returnType = fun.returnType;
                             existed.params = fun.params;
                         }
-                        // both declarations (no body): allowed, do nothing
+                        if(!existed.hasBody && !hasBody){
+                            grader.reportSemanticError(Project3SemanticError.redeclaration(ctx.Identifier()));
+                        }
                     } else {
                         if(globalVarMap.containsKey(name)){
-                            grader.reportSemanticError(Project3SemanticError.redeclaration(ctx.Identifier()));
+                            if(hasBody){
+                                grader.reportSemanticError(Project3SemanticError.redefinition(ctx.Identifier()));
+                            } else {
+                                grader.reportSemanticError(Project3SemanticError.redeclaration(ctx.Identifier()));
+                            }
                         }
                         globalFuncMap.put(name, fun);
                         functions.add(fun);
@@ -487,10 +514,17 @@ public class Compiler extends AbstractCompiler {
                     if(globalFuncMap.containsKey(name)){
                         grader.reportSemanticError(Project3SemanticError.redeclaration(var.identifier));
                     }
-                    // definitionIncomplete: value of incomplete struct (pointer allowed)
-                    StructRefType inc = findFirstIncompleteStructRef(var.typeContainer.type);
-                    if(inc != null){
-                        grader.reportSemanticError(Project3SemanticError.definitionIncomplete(inc.identifier));
+                    // Handle incomplete struct rules:
+                    //  - Arrays: element type must be complete immediately (cannot defer)
+                    //  - Non-array struct value: may defer until full file (might be completed later)
+                    StructRefType arrayInc = findFirstIncompleteStructRefInArray(var.typeContainer.type);
+                    if(arrayInc != null){
+                        grader.reportSemanticError(Project3SemanticError.definitionIncomplete(arrayInc.identifier));
+                    } else {
+                        StructRefType inc = findFirstIncompleteStructRef(var.typeContainer.type);
+                        if(inc != null){
+                            pendingGlobalIncompletes.add(inc); // defer
+                        }
                     }
                     globalVarMap.put(name, var);
                     globalVariables.add(var);
@@ -560,14 +594,14 @@ public class Compiler extends AbstractCompiler {
                     if(ctx.LBRACE()!=null){
                         // struct definition in current scope
                         LinkedHashMap<String, TagInfo> cur = currentTagScope();
-                        // TODO: Check TagInfo exist = cur.get(tag.getText());
                         TagInfo exist = cur.get(tag.getText());
-                        if(exist!=null && exist.defined){
-                            grader.reportSemanticError(Project3SemanticError.redefinition(tag));
+                        // Redeclaration cases:
+                        if((exist!=null && exist.defined) || definingTags.contains(tag.getText())){
+                            grader.reportSemanticError(Project3SemanticError.redeclaration(tag));
                         }
-                        // mark as not yet defined to allow self-pointer
                         cur.put(tag.getText(), new TagInfo(false, tag));
-                        // TODO: Check Here scope?
+                        definingTags.add(tag.getText());
+
                         Scope fieldScope = new Scope(scope, grader);
                         StructType st = new StructType(tag, fieldScope);
                         // build members
@@ -594,6 +628,7 @@ public class Compiler extends AbstractCompiler {
                         }
                         // finish definition
                         cur.put(tag.getText(), new TagInfo(true, tag, st));
+                        definingTags.remove(tag.getText());
                         return st;
                     } else {
                         TagInfo info = lookupTag(tag.getText());
@@ -608,7 +643,7 @@ public class Compiler extends AbstractCompiler {
                 return new PrimitiveType(){};
             }
 
-            // Find first incomplete struct reference in a value type (pointer exempt)
+            // Find first incomplete struct reference in a value type (pointer exempt, arrays recurse)
             private StructRefType findFirstIncompleteStructRef(Type type){
                 if(type instanceof TypeContainer tc){
                     return findFirstIncompleteStructRef(tc.type);
@@ -627,6 +662,65 @@ public class Compiler extends AbstractCompiler {
                     return null; // complete type
                 }
                 return null;
+            }
+            // Specifically detect incomplete struct element type occurring anywhere under an ArrayType layer.
+            private StructRefType findFirstIncompleteStructRefInArray(Type type){
+                return findIncompleteUnderArray(type, false);
+            }
+            private StructRefType findIncompleteUnderArray(Type type, boolean inArray){
+                if(type instanceof TypeContainer tc){
+                    return findIncompleteUnderArray(tc.type, inArray);
+                }
+                if(type instanceof PointerType){
+                    return null; // pointer element allowed
+                }
+                if(type instanceof ArrayType at){
+                    // Entering array context
+                    return findIncompleteUnderArray(at.type, true);
+                }
+                if(inArray && type instanceof StructRefType srt){
+                    return (!srt.defined) ? srt : null;
+                }
+                return null;
+            }
+            @Override
+            public Void visitProgram(SplcParser.ProgramContext ctx){
+                super.visitProgram(ctx);
+                // After full traversal, check deferred global incomplete struct values
+                for(StructRefType srt : pendingGlobalIncompletes){
+                    TagInfo info = lookupTag(srt.identifier.getText());
+                    if(info == null || !info.defined){
+                        grader.reportSemanticError(Project3SemanticError.definitionIncomplete(srt.identifier));
+                    }
+                }
+                // Upgrade global variable types from StructRefType to final StructType for pretty print
+                for(VariableSymbol gv : globalVariables){
+                    upgradeToCompleteIfAvailable(gv.typeContainer);
+                }
+                return null;
+            }
+            private void upgradeToCompleteIfAvailable(TypeContainer tc){
+                if(tc == null) return;
+                tc.type = upgradeType(tc.type);
+            }
+            private Type upgradeType(Type type){
+                if(type instanceof TypeContainer inner){
+                    inner.type = upgradeType(inner.type);
+                    return inner;
+                }
+                if(type instanceof PointerType){
+                    return type; // do not upgrade inside pointer
+                }
+                if(type instanceof ArrayType){
+                    return type; // arrays should already be complete at this point
+                }
+                if(type instanceof StructRefType srt){
+                    TagInfo info = lookupTag(srt.identifier.getText());
+                    if(info != null && info.defined && info.structType != null){
+                        return info.structType;
+                    }
+                }
+                return type;
             }
         }.visit(program);
 
