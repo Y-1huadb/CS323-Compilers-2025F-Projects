@@ -1,11 +1,3 @@
-struct qwq {
-    struct qwq *ptr;
-} d[123];
-
-
-struct s0 {
-    struct s0 *p;
-    char *c[123];
+struct c {
+    struct c c0;
 };
-
-struct s0 s0a;
