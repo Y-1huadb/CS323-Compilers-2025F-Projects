@@ -1,4 +1,0 @@
-struct b;
-struct a{
-    struct b a;
-};

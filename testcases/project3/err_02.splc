@@ -1,5 +1,0 @@
-int a = 1;
-
-int main(char b, int d[123]) {
-    a(b, c);
-}
