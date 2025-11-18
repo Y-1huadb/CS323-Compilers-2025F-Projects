@@ -366,7 +366,15 @@ public class Compiler extends AbstractCompiler {
             // Track tags currently being defined (complete definitions) to catch redeclaration inside member lists
             HashSet<String> definingTags = new HashSet<>();
             // Defer global non-array incomplete struct value checks until end of translation unit
-            ArrayList<StructRefType> pendingGlobalIncompletes = new ArrayList<>();
+            static class PendingGlobalIncomplete {
+                TerminalNode varId;
+                String tagName;
+                PendingGlobalIncomplete(TerminalNode varId, String tagName){
+                    this.varId = varId;
+                    this.tagName = tagName;
+                }
+            }
+            ArrayList<PendingGlobalIncomplete> pendingGlobalIncompletes = new ArrayList<>();
 
             private void pushVarScope(){
                  varScopeStack.add(new LinkedHashMap<>()); 
@@ -519,11 +527,13 @@ public class Compiler extends AbstractCompiler {
                     //  - Non-array struct value: may defer until full file (might be completed later)
                     StructRefType arrayInc = findFirstIncompleteStructRefInArray(var.typeContainer.type);
                     if(arrayInc != null){
-                        grader.reportSemanticError(Project3SemanticError.definitionIncomplete(arrayInc.identifier));
+                        // 数组元素不完整：在变量定义处立即报错，使用变量名
+                        grader.reportSemanticError(Project3SemanticError.definitionIncomplete(var.identifier));
                     } else {
                         StructRefType inc = findFirstIncompleteStructRef(var.typeContainer.type);
                         if(inc != null){
-                            pendingGlobalIncompletes.add(inc); // defer
+                            // 全局非数组结构体值：延迟检查，记录变量名与tag名
+                            pendingGlobalIncompletes.add(new PendingGlobalIncomplete(var.identifier, inc.identifier.getText()));
                         }
                     }
                     globalVarMap.put(name, var);
@@ -554,7 +564,8 @@ public class Compiler extends AbstractCompiler {
                 declareLocalVarOrError(var);
                 StructRefType inc = findFirstIncompleteStructRef(var.typeContainer.type);
                 if(inc != null){
-                    grader.reportSemanticError(Project3SemanticError.definitionIncomplete(inc.identifier));
+                    // 局部变量：在定义处立即报错，使用变量名
+                    grader.reportSemanticError(Project3SemanticError.definitionIncomplete(var.identifier));
                 }
                 if(ctx.expression()!=null) walkExpr(ctx.expression());
                 return null;
@@ -601,12 +612,9 @@ public class Compiler extends AbstractCompiler {
                         }
                         cur.put(tag.getText(), new TagInfo(false, tag));
                         definingTags.add(tag.getText());
-                        // Create a new tag scope for member declarations so that tags inside
-                        // this struct body do not clash with outer file-scope tags.
                         pushTagScope();
                         Scope fieldScope = new Scope(scope, grader);
                         StructType st = new StructType(tag, fieldScope);
-                        // build members
                         List<SplcParser.SpecifierContext> specs = ctx.specifier();
                         List<SplcParser.VarDecContext> vds = ctx.varDec();
                         LinkedHashMap<String, Boolean> memberNames = new LinkedHashMap<>();
@@ -690,10 +698,11 @@ public class Compiler extends AbstractCompiler {
             public Void visitProgram(SplcParser.ProgramContext ctx){
                 super.visitProgram(ctx);
                 // After full traversal, check deferred global incomplete struct values
-                for(StructRefType srt : pendingGlobalIncompletes){
-                    TagInfo info = lookupTag(srt.identifier.getText());
+                for(PendingGlobalIncomplete p : pendingGlobalIncompletes){
+                    TagInfo info = lookupTag(p.tagName);
                     if(info == null || !info.defined){
-                        grader.reportSemanticError(Project3SemanticError.definitionIncomplete(srt.identifier));
+                        // 文件结束仍未补全：报错时使用变量名
+                        grader.reportSemanticError(Project3SemanticError.definitionIncomplete(p.varId));
                     }
                 }
                 // Upgrade global variable types from StructRefType to final StructType for pretty print
