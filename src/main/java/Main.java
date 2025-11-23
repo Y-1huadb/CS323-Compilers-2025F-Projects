@@ -1,9 +1,5 @@
-package main.java;
-
-import framework.project2.Grader;
-import org.antlr.v4.runtime.*;
-import org.antlr.v4.runtime.tree.*;
-
+import framework.AbstractGrader;
+import framework.project3.Grader;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -11,16 +7,8 @@ import java.io.InputStream;
 public class Main {
     public static void main(String[] args) throws IOException {
         {
-            InputStream input = new FileInputStream("testcases/project2/base_13.splc");
-            Grader grader = new Grader(input, System.out, false);
-
-            grader.run();
-        }
-        System.out.println("\n--------------------\n");
-        {
-            InputStream input = new FileInputStream("testcases/project2/error_testcase_1.splc");
-            Grader grader = new Grader(input, System.out, true);
-
+            InputStream input = new FileInputStream("testcases/project3/manual_22.splc");
+            AbstractGrader grader = new Grader(input, System.out);
             grader.run();
         }
     }

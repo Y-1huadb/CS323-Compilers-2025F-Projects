@@ -1,5 +1,0 @@
-int main() {
-    char c = 'A';
-    char tab = '\t';
-    return 0;
-}
