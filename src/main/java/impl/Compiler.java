@@ -44,7 +44,6 @@ class ArrayType implements Type {
         this.type = type;
         this.length = length;
     }
-    
     @Override
     public String prettyPrint(){
         return this.type.prettyPrint() + "["+this.length+"]";
@@ -183,19 +182,10 @@ class TypeContainer implements Type{
             return;
         }
         if(declarator.LBRACK() != null){
-            if(declarator.varDec().LPAREN() != null){
-                ArrayType arrayType = new ArrayType(type, Integer.parseInt(declarator.Number().getText()));
-                typeContainer = new TypeContainer(declarator.varDec(), arrayType);
-                this.identifier = typeContainer.identifier;
-                this.type = typeContainer;
-                return;
-            }
-            TypeContainer tmp = new TypeContainer(declarator.varDec(), type);
-            ArrayType arrayType = new ArrayType(tmp.type, Integer.parseInt(declarator.Number().getText()));
-            typeContainer = new TypeContainer(tmp.identifier, arrayType);
+            ArrayType arrayType = new ArrayType(type, Integer.parseInt(declarator.Number().getText()));
+            typeContainer = new TypeContainer(declarator.varDec(), arrayType);
             this.identifier = typeContainer.identifier;
             this.type = typeContainer;
-            return;
         }
     }
     @Override
@@ -444,6 +434,7 @@ public class Compiler extends AbstractCompiler {
             public Void visitGlobalDef(SplcParser.GlobalDefContext ctx){
                 SplcParser.SpecifierContext spec = ctx.specifier();
                 Type baseType = makeType(spec);
+//                System.out.println(baseType.prettyPrint());
                 if(ctx.Identifier() != null){
                     /* specifier Identifier LPAREN funcArgs RPAREN LBRACE statement* RBRACE */
                     FunctionSymbol fun = new FunctionSymbol(ctx.Identifier(), baseType);
