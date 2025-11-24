@@ -298,15 +298,6 @@ class Scope{
     }
 }
 
-public class ExprVisitor extends SplcBaseVisitor<Void> {
-    @Override
-    public Void visitExpression(SplcParser.ExpressionContext ctx) {
-        String id = ctx.Identifier().getText();
-        //TODO: Visit Expression
-        Project4SemanticError.identifierNotVariable(ctx, id).throwException();
-    }
-}
-
 public class Compiler extends AbstractCompiler {
     public Compiler(AbstractGrader grader) {
         super(grader);
@@ -569,6 +560,11 @@ public class Compiler extends AbstractCompiler {
                     grader.reportSemanticError(Project3SemanticError.definitionIncomplete(var.identifier));
                 }
                 if(ctx.expression()!=null) walkExpr(ctx.expression());
+                try {
+                    new ExprVisitor().visit(ctx.expression());
+                } catch (Project4Exception ex) {
+                    grader.reportSemanticError(ex);
+                }
                 return null;
             }
             @Override
@@ -576,22 +572,42 @@ public class Compiler extends AbstractCompiler {
                 walkExpr(ctx.expression());
                 visit(ctx.statement(0));
                 if(ctx.statement().size()>1) visit(ctx.statement(1));
+                try {
+                    new ExprVisitor().visit(ctx.expression());
+                } catch (Project4Exception ex) {
+                    grader.reportSemanticError(ex);
+                }
                 return null;
             }
             @Override
             public Void visitWhileStmt(SplcParser.WhileStmtContext ctx){
                 walkExpr(ctx.expression());
                 visit(ctx.statement());
+                try {
+                    new ExprVisitor().visit(ctx.expression());
+                } catch (Project4Exception ex) {
+                    grader.reportSemanticError(ex);
+                }
                 return null;
             }
             @Override
             public Void visitReturnStmt(SplcParser.ReturnStmtContext ctx){
                 walkExpr(ctx.expression());
+                try {
+                    new ExprVisitor().visit(ctx.expression());
+                } catch (Project4Exception ex) {
+                    grader.reportSemanticError(ex);
+                }
                 return null;
             }
             @Override
             public Void visitExprStmt(SplcParser.ExprStmtContext ctx){
                 walkExpr(ctx.expression());
+                try {
+                    new ExprVisitor().visit(ctx.expression());
+                } catch (Project4Exception ex) {
+                    grader.reportSemanticError(ex);
+                }
                 return null;
             }
 
@@ -736,55 +752,6 @@ public class Compiler extends AbstractCompiler {
                 return type;
             }
 
-            @Override
-            public Void visitVarDecStmt(SplcParser.VarDecStmtContext ctx) {
-                try {
-                    new ExprVisitor().visit(ctx.expression());
-                } catch (Project4Exception ex) {
-                    grader.reportSemanticError(ex);
-                }
-                return null;
-            }
-
-            @Override
-            public Void visitIfStmt(SplcParser.IfStmtContext ctx) {
-                try {
-                    new ExprVisitor().visit(ctx.expression());
-                } catch (Project4Exception ex) {
-                    grader.reportSemanticError(ex);
-                }
-                return null;
-            }
-
-            @Override
-            public Void visitWhileStmt(SplcParser.WhileStmtContext ctx) {
-                try {
-                    new ExprVisitor().visit(ctx.expression());
-                } catch (Project4Exception ex) {
-                    grader.reportSemanticError(ex);
-                }
-                return null;
-            }
-
-            @Override
-            public Void visitReturnStmt(SplcParser.ReturnStmtContext ctx) {
-                try {
-                    new ExprVisitor().visit(ctx.expression());
-                } catch (Project4Exception ex) {
-                    grader.reportSemanticError(ex);
-                }
-                return null;
-            }
-
-            @Override
-            public Void visitExprStmt(SplcParser.ExprStmtContext ctx) {
-                try {
-                    new ExprVisitor().visit(ctx.expression());
-                } catch (Project4Exception ex) {
-                    grader.reportSemanticError(ex);
-                }
-                return null;
-            }
 
         }.visit(program);
 
