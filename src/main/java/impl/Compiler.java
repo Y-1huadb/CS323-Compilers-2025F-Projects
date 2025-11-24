@@ -3,6 +3,8 @@ package impl;
 import framework.AbstractCompiler;
 import framework.AbstractGrader;
 import framework.project3.Project3SemanticError;
+import framework.project4.Project4SemanticError;
+import framework.project4.Project4Exception;
 import framework.lang.Type;
 import generated.Splc.SplcBaseVisitor;
 import generated.Splc.SplcLexer;
@@ -306,6 +308,15 @@ class Scope{
     }
 }
 
+public class ExprVisitor extends SplcBaseVisitor<Void> {
+    @Override
+    public Void visitExpression(SplcParser.ExpressionContext ctx) {
+        String id = ctx.Identifier().getText();
+
+        Project4SemanticError.identifierNotVariable(ctx, id).throwException();
+    }
+}
+
 public class Compiler extends AbstractCompiler {
     public Compiler(AbstractGrader grader) {
         super(grader);
@@ -340,7 +351,6 @@ public class Compiler extends AbstractCompiler {
         CommonTokenStream tokens = new CommonTokenStream(lexer);
         SplcParser parser = new SplcParser(tokens);
 
-        // TODO: XXX
         SplcParser.ProgramContext program = parser.program();
 
         // Collections for final printing
@@ -734,6 +744,57 @@ public class Compiler extends AbstractCompiler {
                 }
                 return type;
             }
+
+            @Override
+            public Void visitVarDecStmt(SplcParser.VarDecStmtContext ctx) {
+                try {
+                    new ExprVisitor().visit(ctx.expression());
+                } catch (Project4Exception ex) {
+                    grader.reportSemanticError(ex);
+                }
+                return null;
+            }
+
+            @Override
+            public Void visitIfStmt(SplcParser.IfStmtContext ctx) {
+                try {
+                    new ExprVisitor().visit(ctx.expression());
+                } catch (Project4Exception ex) {
+                    grader.reportSemanticError(ex);
+                }
+                return null;
+            }
+
+            @Override
+            public Void visitWhileStmt(SplcParser.WhileStmtContext ctx) {
+                try {
+                    new ExprVisitor().visit(ctx.expression());
+                } catch (Project4Exception ex) {
+                    grader.reportSemanticError(ex);
+                }
+                return null;
+            }
+
+            @Override
+            public Void visitReturnStmt(SplcParser.ReturnStmtContext ctx) {
+                try {
+                    new ExprVisitor().visit(ctx.expression());
+                } catch (Project4Exception ex) {
+                    grader.reportSemanticError(ex);
+                }
+                return null;
+            }
+
+            @Override
+            public Void visitExprStmt(SplcParser.ExprStmtContext ctx) {
+                try {
+                    new ExprVisitor().visit(ctx.expression());
+                } catch (Project4Exception ex) {
+                    grader.reportSemanticError(ex);
+                }
+                return null;
+            }
+
         }.visit(program);
 
         grader.print("Variables:\n");
