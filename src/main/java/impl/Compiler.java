@@ -312,7 +312,7 @@ public class ExprVisitor extends SplcBaseVisitor<Void> {
     @Override
     public Void visitExpression(SplcParser.ExpressionContext ctx) {
         String id = ctx.Identifier().getText();
-
+        //TODO: Visit Expression
         Project4SemanticError.identifierNotVariable(ctx, id).throwException();
     }
 }
