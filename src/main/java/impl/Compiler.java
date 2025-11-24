@@ -561,6 +561,9 @@ public class Compiler extends AbstractCompiler {
                 }
                 if(ctx.expression()!=null) walkExpr(ctx.expression());
                 try {
+                    if(ctx.expression() == null){
+                        return null;
+                    }
                     new ExprVisitor().visit(ctx.expression());
                 } catch (Project4Exception ex) {
                     grader.reportSemanticError(ex);
@@ -573,6 +576,9 @@ public class Compiler extends AbstractCompiler {
                 visit(ctx.statement(0));
                 if(ctx.statement().size()>1) visit(ctx.statement(1));
                 try {
+                    if(ctx.expression() == null){
+                        return null;
+                    }
                     new ExprVisitor().visit(ctx.expression());
                 } catch (Project4Exception ex) {
                     grader.reportSemanticError(ex);
@@ -584,6 +590,9 @@ public class Compiler extends AbstractCompiler {
                 walkExpr(ctx.expression());
                 visit(ctx.statement());
                 try {
+                    if(ctx.expression() == null){
+                        return null;
+                    }
                     new ExprVisitor().visit(ctx.expression());
                 } catch (Project4Exception ex) {
                     grader.reportSemanticError(ex);
@@ -594,6 +603,9 @@ public class Compiler extends AbstractCompiler {
             public Void visitReturnStmt(SplcParser.ReturnStmtContext ctx){
                 walkExpr(ctx.expression());
                 try {
+                    if(ctx.expression() == null){
+                        return null;
+                    }
                     new ExprVisitor().visit(ctx.expression());
                 } catch (Project4Exception ex) {
                     grader.reportSemanticError(ex);
@@ -604,6 +616,9 @@ public class Compiler extends AbstractCompiler {
             public Void visitExprStmt(SplcParser.ExprStmtContext ctx){
                 walkExpr(ctx.expression());
                 try {
+                    if(ctx.expression() == null){
+                        return null;
+                    }
                     new ExprVisitor().visit(ctx.expression());
                 } catch (Project4Exception ex) {
                     grader.reportSemanticError(ex);

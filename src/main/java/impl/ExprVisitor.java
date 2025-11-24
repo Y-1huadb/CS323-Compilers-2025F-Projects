@@ -7,9 +7,11 @@ import generated.Splc.SplcParser;
 public class ExprVisitor extends SplcBaseVisitor<Void> {
     @Override
     public Void visitExpression(SplcParser.ExpressionContext ctx) {
-        String id = ctx.Identifier().getText();
+        if(ctx.Identifier() != null) {
+            String id = ctx.Identifier().getText();
+            Project4SemanticError.identifierNotVariable(ctx, id).throwException();
+        }
         //TODO: Visit Expression
-        Project4SemanticError.identifierNotVariable(ctx, id).throwException();
         return null;
     }
 }
