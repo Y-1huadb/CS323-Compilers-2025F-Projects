@@ -431,6 +431,24 @@ public class Compiler extends AbstractCompiler {
                 }
             }
 
+            private void checkExprSemantics(SplcParser.ExpressionContext expr){
+                if(expr == null){
+                    return;
+                }
+                try {
+                    new ExprVisitor(
+                        this::lookupVarByName,
+                        globalFuncMap::get,
+                        tag -> {
+                            TagInfo info = lookupTag(tag);
+                            return (info != null && info.defined) ? info.structType : null;
+                        }
+                    ).visit(expr);
+                } catch (Project4Exception ex) {
+                    grader.reportSemanticError(ex);
+                }
+            }
+
             @Override
             public Void visitGlobalDef(SplcParser.GlobalDefContext ctx){
                 SplcParser.SpecifierContext spec = ctx.specifier();
@@ -560,14 +578,7 @@ public class Compiler extends AbstractCompiler {
                     grader.reportSemanticError(Project3SemanticError.definitionIncomplete(var.identifier));
                 }
                 if(ctx.expression()!=null) walkExpr(ctx.expression());
-                try {
-                    if(ctx.expression() == null){
-                        return null;
-                    }
-                    new ExprVisitor().visit(ctx.expression());
-                } catch (Project4Exception ex) {
-                    grader.reportSemanticError(ex);
-                }
+                checkExprSemantics(ctx.expression());
                 return null;
             }
             @Override
@@ -575,54 +586,26 @@ public class Compiler extends AbstractCompiler {
                 walkExpr(ctx.expression());
                 visit(ctx.statement(0));
                 if(ctx.statement().size()>1) visit(ctx.statement(1));
-                try {
-                    if(ctx.expression() == null){
-                        return null;
-                    }
-                    new ExprVisitor().visit(ctx.expression());
-                } catch (Project4Exception ex) {
-                    grader.reportSemanticError(ex);
-                }
+                checkExprSemantics(ctx.expression());
                 return null;
             }
             @Override
             public Void visitWhileStmt(SplcParser.WhileStmtContext ctx){
                 walkExpr(ctx.expression());
                 visit(ctx.statement());
-                try {
-                    if(ctx.expression() == null){
-                        return null;
-                    }
-                    new ExprVisitor().visit(ctx.expression());
-                } catch (Project4Exception ex) {
-                    grader.reportSemanticError(ex);
-                }
+                checkExprSemantics(ctx.expression());
                 return null;
             }
             @Override
             public Void visitReturnStmt(SplcParser.ReturnStmtContext ctx){
                 walkExpr(ctx.expression());
-                try {
-                    if(ctx.expression() == null){
-                        return null;
-                    }
-                    new ExprVisitor().visit(ctx.expression());
-                } catch (Project4Exception ex) {
-                    grader.reportSemanticError(ex);
-                }
+                checkExprSemantics(ctx.expression());
                 return null;
             }
             @Override
             public Void visitExprStmt(SplcParser.ExprStmtContext ctx){
                 walkExpr(ctx.expression());
-                try {
-                    if(ctx.expression() == null){
-                        return null;
-                    }
-                    new ExprVisitor().visit(ctx.expression());
-                } catch (Project4Exception ex) {
-                    grader.reportSemanticError(ex);
-                }
+                checkExprSemantics(ctx.expression());
                 return null;
             }
 
