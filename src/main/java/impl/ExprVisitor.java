@@ -194,10 +194,21 @@ public class ExprVisitor extends SplcBaseVisitor<Void> {
         Type leftType = normalize(lhs.type);
         Type rightType = normalize(rhs.type);
         Token op = ctx.ASSIGN().getSymbol();
-        if(isArrayType(leftType) || isArrayType(rightType) || !typeEquals(leftType, rightType)){
-            Project4SemanticError.unmatchedTypeForBinaryOP(ctx, op, leftType, rightType).throwException();
+        boolean leftInt = isInt(leftType);
+        boolean rightInt = isInt(rightType);
+        boolean leftPtr = isPointer(leftType);
+        boolean rightPtr = isPointer(rightType);
+        if(leftInt && rightInt){
+            return new TypeInfo(rightType, ValueCategory.RVALUE);
         }
-        return new TypeInfo(leftType, ValueCategory.RVALUE);
+        if(leftPtr && rightPtr){
+            if(!typeEquals(leftType, rightType)){
+                Project4SemanticError.unmatchedTypeForBinaryOP(ctx, op, leftType, rightType).throwException();
+            }
+            return new TypeInfo(rightType, ValueCategory.RVALUE);
+        }
+        Project4SemanticError.unmatchedTypeForBinaryOP(ctx, op, leftType, rightType).throwException();
+        return new TypeInfo(rightType, ValueCategory.RVALUE);
     }
 
     private TypeInfo handleLogical(ExpressionContext ctx, Token op){
@@ -214,9 +225,20 @@ public class ExprVisitor extends SplcBaseVisitor<Void> {
         TypeInfo right = evaluate(ctx.expression(1));
         Type leftType = normalize(left.type);
         Type rightType = normalize(right.type);
-        if(isArrayType(leftType) || isArrayType(rightType) || !typeEquals(leftType, rightType)){
-            Project4SemanticError.unmatchedTypeForBinaryOP(ctx, op, leftType, rightType).throwException();
+        boolean leftInt = isInt(leftType);
+        boolean rightInt = isInt(rightType);
+        boolean leftPtr = isPointer(leftType);
+        boolean rightPtr = isPointer(rightType);
+        if(leftInt && rightInt){
+            return new TypeInfo(new IntType(), ValueCategory.RVALUE);
         }
+        if(leftPtr && rightPtr){
+            if(!typeEquals(leftType, rightType)){
+                Project4SemanticError.unmatchedTypeForBinaryOP(ctx, op, leftType, rightType).throwException();
+            }
+            return new TypeInfo(new IntType(), ValueCategory.RVALUE);
+        }
+        Project4SemanticError.unmatchedTypeForBinaryOP(ctx, op, leftType, rightType).throwException();
         return new TypeInfo(new IntType(), ValueCategory.RVALUE);
     }
 
