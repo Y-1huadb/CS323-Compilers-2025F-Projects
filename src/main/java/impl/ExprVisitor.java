@@ -41,7 +41,7 @@ public class ExprVisitor extends SplcBaseVisitor<Void> {
     @Override
     public Void visitExpression(SplcParser.ExpressionContext ctx) {
         TypeInfo info = evaluate(ctx);
-        enforceStatementContext(ctx, normalize(info.type));
+        enforceStatementContext(ctx, info);
         return null;
     }
 
@@ -198,6 +198,7 @@ public class ExprVisitor extends SplcBaseVisitor<Void> {
         boolean rightInt = isInt(rightType);
         boolean leftPtr = isPointer(leftType);
         boolean rightPtr = isPointer(rightType);
+        boolean rhsNullPtrLiteral = isNullPointerLiteral(ctx.expression(1));
         if(leftInt && rightInt){
             return new TypeInfo(rightType, ValueCategory.RVALUE);
         }
@@ -206,6 +207,9 @@ public class ExprVisitor extends SplcBaseVisitor<Void> {
                 Project4SemanticError.unmatchedTypeForBinaryOP(ctx, op, leftType, rightType).throwException();
             }
             return new TypeInfo(rightType, ValueCategory.RVALUE);
+        }
+        if(leftPtr && rhsNullPtrLiteral){
+            return new TypeInfo(leftType, ValueCategory.RVALUE);
         }
         Project4SemanticError.unmatchedTypeForBinaryOP(ctx, op, leftType, rightType).throwException();
         return new TypeInfo(rightType, ValueCategory.RVALUE);
@@ -229,6 +233,8 @@ public class ExprVisitor extends SplcBaseVisitor<Void> {
         boolean rightInt = isInt(rightType);
         boolean leftPtr = isPointer(leftType);
         boolean rightPtr = isPointer(rightType);
+        boolean leftNullPtrLiteral = isNullPointerLiteral(ctx.expression(0));
+        boolean rightNullPtrLiteral = isNullPointerLiteral(ctx.expression(1));
         if(leftInt && rightInt){
             return new TypeInfo(new IntType(), ValueCategory.RVALUE);
         }
@@ -236,6 +242,12 @@ public class ExprVisitor extends SplcBaseVisitor<Void> {
             if(!typeEquals(leftType, rightType)){
                 Project4SemanticError.unmatchedTypeForBinaryOP(ctx, op, leftType, rightType).throwException();
             }
+            return new TypeInfo(new IntType(), ValueCategory.RVALUE);
+        }
+        if(leftPtr && rightNullPtrLiteral){
+            return new TypeInfo(new IntType(), ValueCategory.RVALUE);
+        }
+        if(rightPtr && leftNullPtrLiteral){
             return new TypeInfo(new IntType(), ValueCategory.RVALUE);
         }
         Project4SemanticError.unmatchedTypeForBinaryOP(ctx, op, leftType, rightType).throwException();
@@ -336,13 +348,84 @@ public class ExprVisitor extends SplcBaseVisitor<Void> {
         return new TypeInfo(normalize(member.typeContainer), ValueCategory.LVALUE);
     }
 
-    private void enforceStatementContext(ExpressionContext ctx, Type type){
+    private void enforceStatementContext(ExpressionContext ctx, TypeInfo info){
         ParserRuleContext parent = ctx.getParent();
+        Type normalized = normalize(info.type);
         if(parent instanceof SplcParser.ReturnStmtContext){
-            ensureIntType(ctx, type);
+            Type expected = resolveEnclosingFunctionReturnType(ctx);
+            if(expected != null){
+                ensureAssignable(ctx, normalized, expected, null);
+            } else {
+                ensureIntType(ctx, normalized);
+            }
         } else if(parent instanceof SplcParser.IfStmtContext || parent instanceof SplcParser.WhileStmtContext){
-            ensureLogicalCompatible(ctx, type);
+            ensureLogicalCompatible(ctx, normalized);
+        } else if(parent instanceof SplcParser.VarDecStmtContext varDecStmt){
+            if(varDecStmt.ASSIGN()!=null){
+                Type declared = resolveDeclaredVariableType(varDecStmt);
+                if(declared != null){
+                    ensureAssignable(ctx, normalized, declared, varDecStmt.ASSIGN().getSymbol());
+                }
+            }
         }
+    }
+
+    private void ensureAssignable(ExpressionContext ctx, Type source, Type target, Token op){
+        if(source == null || target == null){
+            return;
+        }
+        if(typeEquals(source, target)){
+            return;
+        }
+        Type normalizedTarget = normalize(target);
+        if(normalizedTarget instanceof PointerType && isNullPointerLiteral(ctx)){
+            return;
+        }
+        Type normalizedSource = normalize(source);
+        if(op != null){
+            Project4SemanticError.unmatchedTypeForBinaryOP(ctx, op, normalizedTarget, normalizedSource).throwException();
+        } else {
+            Project4SemanticError.unexpectedType(ctx, normalizedSource).throwException();
+        }
+    }
+
+    private Type resolveDeclaredVariableType(SplcParser.VarDecStmtContext ctx){
+        SplcParser.VarDecContext declarator = ctx.varDec();
+        TerminalNode identifier = extractIdentifier(declarator);
+        if(identifier == null){
+            return null;
+        }
+        VariableSymbol symbol = variableResolver.apply(identifier.getText());
+        if(symbol == null){
+            return null;
+        }
+        return normalize(symbol.typeContainer);
+    }
+
+    private TerminalNode extractIdentifier(SplcParser.VarDecContext ctx){
+        if(ctx == null){
+            return null;
+        }
+        if(ctx.Identifier()!=null){
+            return ctx.Identifier();
+        }
+        return extractIdentifier(ctx.varDec());
+    }
+
+    private Type resolveEnclosingFunctionReturnType(ExpressionContext ctx){
+        ParserRuleContext current = ctx;
+        while(current != null){
+            if(current instanceof SplcParser.GlobalDefContext global && global.Identifier()!=null){
+                String name = global.Identifier().getText();
+                FunctionSymbol symbol = functionResolver.apply(name);
+                if(symbol != null){
+                    return normalize(symbol.returnType);
+                }
+                return null;
+            }
+            current = current.getParent();
+        }
+        return null;
     }
 
     private void ensureLvalue(ExpressionContext ctx, TypeInfo info){
@@ -454,6 +537,24 @@ public class ExprVisitor extends SplcBaseVisitor<Void> {
         return ctx.expression().size()==2 && (ctx.STAR()!=null || ctx.DIV()!=null || ctx.MOD()!=null);
     }
 
+    private boolean isNullPointerLiteral(ExpressionContext ctx){
+        if(ctx == null){
+            return false;
+        }
+        if(isParenthesized(ctx)){
+            return isNullPointerLiteral(ctx.expression(0));
+        }
+        if(ctx.Number()!=null){
+            String text = ctx.Number().getText();
+            try{
+                return Long.parseLong(text)==0L;
+            }catch(NumberFormatException ex){
+                return false;
+            }
+        }
+        return false;
+    }
+
     private Token firstToken(TerminalNode... nodes){
         for(TerminalNode node : nodes){
             if(node != null){
@@ -489,10 +590,6 @@ public class ExprVisitor extends SplcBaseVisitor<Void> {
 
     private boolean isPointer(Type type){
         return unwrap(type) instanceof PointerType;
-    }
-
-    private boolean isArrayType(Type type){
-        return unwrap(type) instanceof ArrayType;
     }
 
     private boolean typeEquals(Type left, Type right){

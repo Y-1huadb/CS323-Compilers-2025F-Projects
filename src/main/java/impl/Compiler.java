@@ -762,16 +762,16 @@ public class Compiler extends AbstractCompiler {
 
         }.visit(program);
 
-        grader.print("Variables:\n");
-        for(VariableSymbol v : globalVariables){
-            grader.print(v.prettyPrint()+"\n");
-        }
+        // grader.print("Variables:\n");
+        // for(VariableSymbol v : globalVariables){
+        //     grader.print(v.prettyPrint()+"\n");
+        // }
 
-        grader.print("\n");
+        // grader.print("\n");
 
-        grader.print("Functions:\n");
-        for(FunctionSymbol f : functions){
-            grader.print(f.prettyPrint()+"\n");
-        }
+        // grader.print("Functions:\n");
+        // for(FunctionSymbol f : functions){
+        //     grader.print(f.prettyPrint()+"\n");
+        // }
     }
 }
