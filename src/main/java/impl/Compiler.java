@@ -389,6 +389,15 @@ public class Compiler extends AbstractCompiler {
                 }
                 return null;
             }
+            private TagInfo declareImplicitTag(TerminalNode tag){
+                LinkedHashMap<String, TagInfo> cur = currentTagScope();
+                if(cur == null){
+                    cur = tagScopeStack.get(0);
+                }
+                TagInfo info = new TagInfo(false, tag);
+                cur.put(tag.getText(), info);
+                return info;
+            }
 
             private VariableSymbol lookupVarByName(String name){
                 for(int i = varScopeStack.size()-1; i >= 0; i--){
@@ -627,7 +636,6 @@ public class Compiler extends AbstractCompiler {
                         }
                         cur.put(tag.getText(), new TagInfo(false, tag));
                         definingTags.add(tag.getText());
-                        pushTagScope();
                         Scope fieldScope = new Scope(scope, grader);
                         StructType st = new StructType(tag, fieldScope);
                         List<SplcParser.SpecifierContext> specs = ctx.specifier();
@@ -652,18 +660,19 @@ public class Compiler extends AbstractCompiler {
                             memberNames.put(memName, true);
                         }
                         // finish definition
-                        popTagScope();
                         cur.put(tag.getText(), new TagInfo(true, tag, st));
                         definingTags.remove(tag.getText());
                         return st;
                     } else {
                         TagInfo info = lookupTag(tag.getText());
-                        if(info != null && info.defined && info.structType != null){
+                        if(info == null){
+                            info = declareImplicitTag(tag);
+                        }
+                        if(info.defined && info.structType != null){
                             // 已定义的结构体，返回完整 StructType 以便后续 fullPrint
                             return info.structType;
                         }
-                        boolean defined = info!=null && info.defined;
-                        return new StructRefType(tag, defined);
+                        return new StructRefType(tag, info.defined);
                     }
                 }
                 return new PrimitiveType(){};
