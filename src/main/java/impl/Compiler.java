@@ -762,6 +762,11 @@ public class Compiler extends AbstractCompiler {
 
         }.visit(program);
 
+        // Build and print LLVM IR using IRGen (Project 5)
+        IRGen irGen = new IRGen(this.grader);
+        program.accept(irGen);
+        this.grader.printIR(irGen.getIRBuilder());
+
         // grader.print("Variables:\n");
         // for(VariableSymbol v : globalVariables){
         //     grader.print(v.prettyPrint()+"\n");
