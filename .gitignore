@@ -2,17 +2,19 @@
 #### Ignore generated ####
 out/
 output/
+
 src/main/java/generated
+project5_testcases/bin
+project5_testcases/ir
+
 *.tar
 *.tar.gz
-*.class
 .myapi.key
 
 target/
 !.mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/
-testcases/
 
 ### IntelliJ IDEA ###
 .idea/modules.xml
@@ -47,5 +49,4 @@ build/
 .vscode/
 
 ### Mac OS ###
-
 .DS_Store

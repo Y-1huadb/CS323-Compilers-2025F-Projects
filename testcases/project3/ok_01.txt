@@ -1,0 +1,2 @@
+d: struct qwq[123]
+s0a: struct s0{struct s0* p;char*[123] c;}
