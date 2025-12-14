@@ -10,7 +10,7 @@ int main0() {
     if (res > 1000) {
         res = - res;
     } else {
-        if (res < -2000) 
+        if (res < -2000)
             res = res * 2;
     }
     writeint(res);

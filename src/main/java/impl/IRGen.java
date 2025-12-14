@@ -236,10 +236,6 @@ public class IRGen extends SplcBaseVisitor<Void> {
 
     @Override
     public Void visitIfStmt(SplcParser.IfStmtContext ctx) {
-        System.out.println(ctx.getText());
-
-        System.out.println(ctx.statement(0).getText());
-        System.out.println(ctx.statement(1).getText());
 
         // TODO: Evaluate condition expression
          IRValue condition = evaluateExpression(ctx.expression());
@@ -316,50 +312,46 @@ public class IRGen extends SplcBaseVisitor<Void> {
         return null;
     }
 
-    /**
-     * Evaluate an expression and return its IRValue (right-hand side value).
-     * For example:
-     *   - "1 + 1" returns an IRValue representing the sum
-     *   - "a" returns the loaded value from variable a
-     *   - "a = 5" stores 5 to a and returns the stored value
-     */
     private IRValue evaluateExpression(SplcParser.ExpressionContext ctx) {
+        if (ctx.Identifier() != null && ctx.LPAREN() != null) {
+            return evaluateCall(ctx);
+        }
+
         if (ctx.Number() != null) {
-            // Constant integer: e.g., 1, 42, 100
+            // Constant integer
             int value = Integer.parseInt(ctx.Number().getText());
             return IRValue.consti32(value);
         }
         
         if (ctx.Identifier() != null && ctx.getChildCount() == 1) {
-            // Variable reference: e.g., a, x, count
+            // Variable reference
             String varName = ctx.Identifier().getText();
             IRValue varPtr = symbolTable.get(varName);
             if (varPtr == null) {
                 throw new RuntimeException("Variable not found: " + varName);
             }
-            // Load the value from the variable
             return currentBlock.load(varPtr, IRType.int32(), null);
         }
         
         if (ctx.LPAREN() != null && ctx.expression().size() == 1) {
-            // Parenthesized expression: (expr)
+            // Parenthesized expression
             return evaluateExpression(ctx.expression(0));
         }
 
         if (ctx.EQ() != null || ctx.NEQ() != null ||
             ctx.LT() != null || ctx.LE() != null ||
             ctx.GT() != null || ctx.GE() != null) {
-            return evaluateRelOp(ctx);  // ·µ»Ø i1
+            return evaluateRelOp(ctx);
         }
         
-        // Binary operations: a + b, a - b, a * b, a / b, a = b, etc.
+        // Binary operations
         if (ctx.PLUS() != null || ctx.MINUS() != null || ctx.STAR() != null || 
             ctx.DIV() != null || ctx.MOD() != null) {
             return evaluateBinaryOp(ctx);
         }
         
         if (ctx.ASSIGN() != null) {
-            // Assignment: a = expr
+            // Assignment
             return evaluateAssignment(ctx);
         }
         
@@ -367,10 +359,25 @@ public class IRGen extends SplcBaseVisitor<Void> {
         throw new RuntimeException("Unsupported expression: " + ctx.getText());
     }
 
+    private IRValue evaluateCall(SplcParser.ExpressionContext ctx) {
+        String callee = ctx.Identifier().getText();
+
+        List<IRValue> args = new ArrayList<>();
+        if (ctx.expression() != null && !ctx.expression().isEmpty()) {
+            for (SplcParser.ExpressionContext e : ctx.expression()) {
+                args.add(evaluateExpression(e));
+            }
+        }
+
+        IRType retType = IRType.int32();
+
+        return currentBlock.call(retType, callee, args, null);
+    }
+
 
     private IRValue evaluateRelOp(SplcParser.ExpressionContext ctx) {
-        IRValue lhs = evaluateExpression(ctx.expression(0)); // i32
-        IRValue rhs = evaluateExpression(ctx.expression(1)); // i32
+        IRValue lhs = evaluateExpression(ctx.expression(0));
+        IRValue rhs = evaluateExpression(ctx.expression(1));
 
         // TODO Whether there should consider unsigned int
         LLVMIcmpPredicate pred;
@@ -385,13 +392,17 @@ public class IRGen extends SplcBaseVisitor<Void> {
         return currentBlock.icmp(lhs, pred, rhs, null); // i1
     }
 
-    /**
-     * Evaluate binary arithmetic operations.
-     * For example, "1 + 1" is translated to:
-     *   %tmp = add i32 1, 1
-     */
     private IRValue evaluateBinaryOp(SplcParser.ExpressionContext ctx) {
         IRValue lhs = evaluateExpression(ctx.expression(0));
+        if(ctx.expression().size() == 1){
+            if(ctx.PLUS() != null){
+                return lhs;
+            } else if (ctx.MINUS() != null) {
+                IRValue tmp = IRValue.consti32(0);
+                return currentBlock.sub(tmp, lhs, null);
+            }
+            throw new RuntimeException("Unknown unary operator");
+        }
         IRValue rhs = evaluateExpression(ctx.expression(1));
         
         if (ctx.PLUS() != null) {
@@ -409,13 +420,7 @@ public class IRGen extends SplcBaseVisitor<Void> {
         throw new RuntimeException("Unknown binary operator");
     }
     
-    /**
-     * Evaluate assignment expression: a = rhs
-     * This stores the RHS value into variable a and returns the stored value.
-     * For example, "a = 1 + 1" is translated to:
-     *   %tmp = add i32 1, 1
-     *   store i32 %tmp, i32* %a
-     */
+
     private IRValue evaluateAssignment(SplcParser.ExpressionContext ctx) {
         // LHS must be an identifier (variable name)
         SplcParser.ExpressionContext lhsExpr = ctx.expression(0);
