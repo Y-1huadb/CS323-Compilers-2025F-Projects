@@ -10,13 +10,48 @@ import framework.llvm.LLVMIcmpPredicate;
 import org.antlr.v4.runtime.misc.Pair;
 import generated.Splc.SplcBaseVisitor;
 import generated.Splc.SplcParser;
+import org.antlr.v4.runtime.tree.TerminalNode;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
+
+
+class VariableScope {
+    // Symbols table
+    LinkedHashMap<String, IRType> typeMap = new LinkedHashMap<>();
+    LinkedHashMap<String, IRValue> valueMap = new LinkedHashMap<>();
+
+    // Parent Scope
+    VariableScope parent;
+    //Child Scope;
+    ArrayList<VariableScope> children = new ArrayList<>();
+
+    public VariableScope(VariableScope parent) {
+        this.parent = parent;
+        if(parent != null){
+            parent.children.add(this);
+        }
+    }
+
+    public void define(String var, IRType type, IRValue value){
+        typeMap.put(var, type);
+        valueMap.put(var, value);
+    }
+
+    public IRType lookupType(String identifier){
+        IRType type = typeMap.get(identifier);
+        if (type != null) return type;
+        if (parent != null) return parent.lookupType(identifier);
+        return null;
+    }
+
+    public IRValue lookupValue(String identifier){
+        IRValue value = valueMap.get(identifier);
+        if(value != null) return value;
+        if(parent != null) return parent.lookupValue(identifier);
+        return null;
+    }
+
+}
 
 /**
  * Minimal IR generator skeleton for Project 5.
@@ -31,12 +66,12 @@ import java.util.Set;
 public class IRGen extends SplcBaseVisitor<Void> {
     private final AbstractGrader grader;
     private final IRBuilder ir;
-    private final Set<String> definedStructures = new HashSet<>();
+    private final LinkedHashMap<String, LinkedHashMap<String, IRType>> definedStructures = new LinkedHashMap<>();
     private FunctionBuilder currentFunction;
     private BasicBlockBuilder currentBlock;
     
     // Symbol table: variable name -> allocated pointer (IRValue)
-    private Map<String, IRValue> symbolTable = new HashMap<>();
+    private VariableScope curVariableScope = new VariableScope(null);
 
     public IRGen(AbstractGrader grader) {
         this.grader = grader;
@@ -80,7 +115,6 @@ public class IRGen extends SplcBaseVisitor<Void> {
     }
 
     private void handleFunction(SplcParser.SpecifierContext spec, SplcParser.GlobalDefContext ctx) {
-        System.out.println(ctx.getText());
         String name = ctx.Identifier().getText();
         IRType returnType = resolveSpecifierType(spec);
         List<Pair<String, IRType>> args = buildFunctionArgs(ctx.funcArgs());
@@ -95,14 +129,25 @@ public class IRGen extends SplcBaseVisitor<Void> {
 
         this.currentFunction = fb;
         this.currentBlock = entry;
-        
-        // TODO: Process function body statements
+
+
+        this.curVariableScope = new VariableScope(curVariableScope);
+
+        if (args != null) {
+            for (Pair<String, IRType> arg : args) {
+                IRValue paramPtr = fb.param(arg.a);
+                curVariableScope.define(arg.a, arg.b, paramPtr);
+            }
+        }
+
         List<SplcParser.StatementContext> statementContexts = ctx.statement();
         for(SplcParser.StatementContext statementContext : statementContexts){
-            // Translate each statement
-            // visitStatement(statementContext, fb, entry);
             visit(statementContext);
         }
+
+        this.curVariableScope = curVariableScope.parent;
+        this.currentFunction = null;
+        this.currentBlock = null;
     }
 
     private void handleGlobalVariable(SplcParser.SpecifierContext spec, SplcParser.VarDecContext declarator) {
@@ -136,16 +181,21 @@ public class IRGen extends SplcBaseVisitor<Void> {
         }
         if (specCtx.STRUCT() != null) {
             String name = specCtx.Identifier().getText();
-            if (specCtx.LBRACE() != null && definedStructures.add(name)) {
+            if (specCtx.LBRACE() != null && !definedStructures.containsKey(name)) {
                 List<IRType> fieldTypes = new ArrayList<>();
+                LinkedHashMap<String, IRType> members = new LinkedHashMap<>();
                 List<SplcParser.SpecifierContext> fieldSpecs = specCtx.specifier();
                 List<SplcParser.VarDecContext> fieldDecls = specCtx.varDec();
                 for (int i = 0; i < fieldSpecs.size(); i++) {
                     IRType fieldBase = resolveSpecifierType(fieldSpecs.get(i));
                     VarInfo fieldInfo = resolveDeclarator(fieldBase, fieldDecls.get(i));
                     fieldTypes.add(fieldInfo.type());
+                    // TODO: Check here definedStructures
+                    System.out.println(fieldDecls.get(i).getText());
+                    members.put(fieldDecls.get(i).getText(), fieldBase);
                 }
                 ir.defineStructure(name, fieldTypes);
+                definedStructures.put(name, members);
             }
             return IRType.structure(name);
         }
@@ -218,9 +268,8 @@ public class IRGen extends SplcBaseVisitor<Void> {
 
         // Allocate space on the stack for the variable
         IRValue allocaPtr = currentBlock.alloca(varInfo.type(), varInfo.name());
-        
-        // Register the variable in symbol table
-        symbolTable.put(varInfo.name(), allocaPtr);
+
+        curVariableScope.define(varInfo.name, varInfo.type, allocaPtr);
         
         // If there's an initialization expression
         if (ctx.expression() != null) {
@@ -313,8 +362,9 @@ public class IRGen extends SplcBaseVisitor<Void> {
     }
 
     private IRValue evaluateExpression(SplcParser.ExpressionContext ctx) {
-        if (ctx.Identifier() != null && ctx.LPAREN() != null) {
-            return evaluateCall(ctx);
+        if (ctx.LPAREN() != null && ctx.expression().size() == 1 && ctx.Identifier() == null) {
+            // Parenthesized expression
+            return evaluateExpression(ctx.expression(0));
         }
 
         if (ctx.Number() != null) {
@@ -326,16 +376,25 @@ public class IRGen extends SplcBaseVisitor<Void> {
         if (ctx.Identifier() != null && ctx.getChildCount() == 1) {
             // Variable reference
             String varName = ctx.Identifier().getText();
-            IRValue varPtr = symbolTable.get(varName);
+            IRValue varPtr = curVariableScope.lookupValue(varName);
             if (varPtr == null) {
                 throw new RuntimeException("Variable not found: " + varName);
             }
             return currentBlock.load(varPtr, IRType.int32(), null);
         }
+
+        if (ctx.Identifier() != null && ctx.LPAREN() != null) {
+            return evaluateCall(ctx);
+        }
+
+        // Array access: a[i]
+        if (ctx.LBRACK() != null) {
+            return evaluateArrayAccess(ctx);
+        }
         
-        if (ctx.LPAREN() != null && ctx.expression().size() == 1) {
-            // Parenthesized expression
-            return evaluateExpression(ctx.expression(0));
+        // Struct/pointer field access: s.field or p->field
+        if (ctx.DOT() != null || ctx.ARROW() != null) {
+            return evaluateStructAccess(ctx);
         }
 
         if (ctx.EQ() != null || ctx.NEQ() != null ||
@@ -355,8 +414,67 @@ public class IRGen extends SplcBaseVisitor<Void> {
             return evaluateAssignment(ctx);
         }
         
-        // TODO: Add support for more expressions (function calls, array access, struct access, etc.)
+        // TODO: Add support for more expressions (pointer dereference, etc.)
         throw new RuntimeException("Unsupported expression: " + ctx.getText());
+    }
+
+    private IRValue evaluateArrayAccess(SplcParser.ExpressionContext ctx) {
+        SplcParser.ExpressionContext arrayExpr = ctx.expression(0);
+        IRValue arrayPtr = evaluateLValue(arrayExpr);
+
+        SplcParser.ExpressionContext indexExpr = ctx.expression(1);
+        IRValue index = evaluateExpression(indexExpr);
+
+        IRType elementType = IRType.int32();
+        IRValue elementPtr = currentBlock.gep(arrayPtr, elementType, index, null);
+
+        return currentBlock.load(elementPtr, elementType, null);
+    }
+
+    private IRValue evaluateStructAccess(SplcParser.ExpressionContext ctx) {
+        // 获取结构体或指针
+        SplcParser.ExpressionContext structExpr = ctx.expression(0);
+        IRValue structPtr = evaluateLValue(structExpr);
+        
+        // 获取字段名称
+        String fieldName = ctx.Identifier().getText();
+        
+        // TODO: 根据字段名称获取字段索引（需要维护结构体定义信息）
+        int fieldIndex = 0;  // 占位符
+        IRType fieldType = IRType.int32();  // 占位符
+        
+        // 使用 GEP 计算字段地址
+        IRValue fieldPtr = currentBlock.gep(structPtr, fieldType, 0, 
+                                           IRValue.consti32(fieldIndex), null);
+
+        // 加载字段值
+        return currentBlock.load(fieldPtr, fieldType, null);
+    }
+
+    private IRValue evaluateLValue(SplcParser.ExpressionContext ctx) {
+        if (ctx.Identifier() != null && ctx.getChildCount() == 1) {
+            // 变量引用
+            String varName = ctx.Identifier().getText();
+            IRValue varPtr = curVariableScope.lookupValue(varName);
+
+            if (varPtr == null) {
+                throw new RuntimeException("Variable not found: " + varName);
+            }
+            return varPtr;
+        }
+        
+        if (ctx.LBRACK() != null) {
+            SplcParser.ExpressionContext arrayExpr = ctx.expression(0);
+            IRValue arrayPtr = evaluateLValue(arrayExpr);
+            
+            SplcParser.ExpressionContext indexExpr = ctx.expression(1);
+            IRValue index = evaluateExpression(indexExpr);
+            
+            IRType elementType = IRType.int32();
+            return currentBlock.gep(arrayPtr, elementType, index, null);
+        }
+
+        throw new RuntimeException("Not an lvalue: " + ctx.getText());
     }
 
     private IRValue evaluateCall(SplcParser.ExpressionContext ctx) {
@@ -389,7 +507,7 @@ public class IRGen extends SplcBaseVisitor<Void> {
         else if (ctx.GE() != null) pred = LLVMIcmpPredicate.SignedLE;
         else throw new RuntimeException("Unknown relop");
 
-        return currentBlock.icmp(lhs, pred, rhs, null); // i1
+        return currentBlock.icmp(lhs, pred, rhs, null);
     }
 
     private IRValue evaluateBinaryOp(SplcParser.ExpressionContext ctx) {
@@ -422,23 +540,18 @@ public class IRGen extends SplcBaseVisitor<Void> {
     
 
     private IRValue evaluateAssignment(SplcParser.ExpressionContext ctx) {
-        // LHS must be an identifier (variable name)
+        // LHS is an lvalue expression
         SplcParser.ExpressionContext lhsExpr = ctx.expression(0);
-        if (lhsExpr.Identifier() == null || lhsExpr.getChildCount() != 1) {
-            throw new RuntimeException("Assignment target must be a variable");
-        }
-        
-        String varName = lhsExpr.Identifier().getText();
-        IRValue varPtr = symbolTable.get(varName);
-        if (varPtr == null) {
-            throw new RuntimeException("Variable not found: " + varName);
-        }
+        IRValue lhsPtr = evaluateLValue(lhsExpr);  // 获取左值指针
         
         // Evaluate RHS
         IRValue rhsValue = evaluateExpression(ctx.expression(1));
         
-        // Store RHS value to the variable
-        currentBlock.store(varPtr, IRType.int32(), rhsValue);
+        // 确定要赋值的类型（大多数情况是 i32，但可能是其他类型）
+        IRType assignType = IRType.int32();  // TODO: 从类型系统中获取实际类型
+        
+        // Store RHS value to the LHS location
+        currentBlock.store(lhsPtr, assignType, rhsValue);
         
         return rhsValue;
     }

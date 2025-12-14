@@ -5,6 +5,10 @@ int getrand();
 int assert_eq(int where, int given, int expected);
 
 int main0() {
+    struct a{
+        int b;
+        int c;
+    } e;
     int inputs[6];
     int i= 1 + 1;
     int b = i + 1;
