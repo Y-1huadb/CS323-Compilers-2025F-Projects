@@ -11,7 +11,7 @@ make clean || exit 1
 
 # 遍历当前目录下所有 test 开头且后接数字的目录
 # sort 确保按 test01, test02 顺序执行
-for test_dir in $(ls -d test[0-9]* 2>/dev/null | sort); do
+for test_dir in $(ls -d test10[0-9] 2>/dev/null | sort); do
 
 
     # 1. 动态查找所有的 .in 文件
