@@ -11,13 +11,17 @@ int coords[512];
 int uniq[512];
 int segH[512];
 
-void swap(int i, int j) {
+int swap(int i, int j) {
     int t = coords[i];
     coords[i] = coords[j];
     coords[j] = t;
+    return 0;
 }
 
-int max(int a, int b) { return a > b ? a : b; }
+int max(int a, int b) {
+    if (a > b) return a;
+    return b;
+}
 
 int main0() {
     int n = readint();

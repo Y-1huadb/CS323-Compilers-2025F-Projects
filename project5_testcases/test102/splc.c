@@ -7,7 +7,10 @@ int assert_eq(int where, int given, int expected);
 int a[256];
 int dp[256];
 
-int max(int x, int y) { return x > y ? x : y; }
+int max(int x, int y) { 
+    if (x > y) return x;
+    return y;
+}
 
 int main0() {
     int n = readint();

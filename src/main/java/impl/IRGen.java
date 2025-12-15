@@ -368,7 +368,7 @@ public class IRGen extends SplcBaseVisitor<Void> {
         curVariableScope.define(varInfo.name(), varInfo.type(), allocaPtr);
 
         if (ctx.expression() != null) {
-            EvalResult init = Expression(ctx.expression(), varInfo.type());
+            EvalResult init = evaluateExpression(ctx.expression(), varInfo.type());
             IRValue initValue = convertValue(init, varInfo.type());
             currentBlock.store(allocaPtr, varInfo.type().irType, initValue);
         }

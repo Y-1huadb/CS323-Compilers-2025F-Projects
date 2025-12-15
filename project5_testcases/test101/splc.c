@@ -7,7 +7,7 @@ int assert_eq(int where, int given, int expected);
 int a[256];
 int tmp[256];
 
-void merge(int l, int m, int r) {
+int merge(int l, int m, int r) {
     int i = l;
     int j = m + 1;
     int k = l;
@@ -25,14 +25,16 @@ void merge(int l, int m, int r) {
     while (j <= r) { tmp[k] = a[j]; j = j + 1; k = k + 1; }
     k = l;
     while (k <= r) { a[k] = tmp[k]; k = k + 1; }
+    return 0;
 }
 
-void mergesort(int l, int r) {
-    if (l >= r) return;
+int mergesort(int l, int r) {
+    if (l >= r) return 0;
     int m = (l + r) / 2;
     mergesort(l, m);
     mergesort(m + 1, r);
     merge(l, m, r);
+    return 0;
 }
 
 int main0() {

@@ -6,11 +6,17 @@ int assert_eq(int where, int given, int expected);
 
 struct Node { int v; int l; int r; int h; };
 struct Node nodes[256];
-int node_cnt = 0;
-int root = -1;
+int node_cnt;
+int root;
 
-int max(int a, int b) { return a > b ? a : b; }
-int height(int idx) { return idx == -1 ? 0 : nodes[idx].h; }
+int max(int a, int b) {
+    if (a > b) return a;
+    return b;
+}
+int height(int idx) {
+    if (idx == -1) return 0;
+    return nodes[idx].h;
+}
 
 int new_node(int v) {
     int idx = node_cnt;
@@ -67,14 +73,17 @@ int insert_avl(int idx, int v) {
     return idx;
 }
 
-void inorder(int idx) {
-    if (idx == -1) return;
+int inorder(int idx) {
+    if (idx == -1) return 0;
     inorder(nodes[idx].l);
     writeint(nodes[idx].v);
     inorder(nodes[idx].r);
+    return 0;
 }
 
 int main0() {
+    node_cnt = 0;
+    root = -1;
     int n = readint();
     int i = 0;
     while (i < n) {

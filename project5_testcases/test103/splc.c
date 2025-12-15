@@ -12,25 +12,27 @@ struct Node {
     struct Node* p;
 };
 
-struct Node pool[256];
-int pool_cnt = 0;
+struct Node nodes_pool[256];
+int pool_cnt;
 struct Node* NIL;
 struct Node* root;
+struct Node* tmp_node;
 
-struct Node* new_node(int v) {
-    struct Node* n = &pool[pool_cnt];
+int new_node(int v) {
+    struct Node* n = &nodes_pool[pool_cnt];
     pool_cnt = pool_cnt + 1;
     n->v = v;
     n->color = 1;
     n->l = NIL;
     n->r = NIL;
     n->p = NIL;
-    return n;
+    tmp_node = n;
+    return 0;
 }
 
-void init_rb() {
+int init_rb() {
     pool_cnt = 0;
-    NIL = &pool[pool_cnt];
+    NIL = &nodes_pool[pool_cnt];
     pool_cnt = pool_cnt + 1;
     NIL->v = 0;
     NIL->color = 0;
@@ -38,9 +40,10 @@ void init_rb() {
     NIL->r = NIL;
     NIL->p = NIL;
     root = NIL;
+    return 0;
 }
 
-void left_rotate(struct Node* x) {
+int left_rotate(struct Node* x) {
     struct Node* y = x->r;
     x->r = y->l;
     if (y->l != NIL) y->l->p = x;
@@ -54,9 +57,10 @@ void left_rotate(struct Node* x) {
     }
     y->l = x;
     x->p = y;
+    return 0;
 }
 
-void right_rotate(struct Node* y) {
+int right_rotate(struct Node* y) {
     struct Node* x = y->l;
     y->l = x->r;
     if (x->r != NIL) x->r->p = y;
@@ -70,9 +74,10 @@ void right_rotate(struct Node* y) {
     }
     x->r = y;
     y->p = x;
+    return 0;
 }
 
-void insert_fix(struct Node* z) {
+int insert_fix(struct Node* z) {
     while (z->p->color == 1) {
         if (z->p == z->p->p->l) {
             struct Node* y = z->p->p->r;
@@ -109,10 +114,12 @@ void insert_fix(struct Node* z) {
         }
     }
     root->color = 0;
+    return 0;
 }
 
-void insert_value(int v) {
-    struct Node* z = new_node(v);
+int insert_value(int v) {
+    new_node(v);
+    struct Node* z = tmp_node;
     struct Node* y = NIL;
     struct Node* x = root;
     while (x != NIL) {
@@ -122,13 +129,15 @@ void insert_value(int v) {
     z->p = y;
     if (y == NIL) root = z; else if (z->v < y->v) y->l = z; else y->r = z;
     insert_fix(z);
+    return 0;
 }
 
-void inorder(struct Node* x) {
-    if (x == NIL) return;
+int inorder(struct Node* x) {
+    if (x == NIL) return 0;
     inorder(x->l);
     writeint(x->v);
     inorder(x->r);
+    return 0;
 }
 
 int main0() {
