@@ -6,7 +6,9 @@ int assert_eq(int where, int given, int expected);
 
 int main() {
     int seed;
-    int r1, r2, r3;
+    int r1;
+    int r2;
+    int r3;
 
     seed = readint();
     int a = setseed(seed);

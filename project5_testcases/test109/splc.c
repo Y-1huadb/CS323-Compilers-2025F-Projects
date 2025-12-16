@@ -4,35 +4,25 @@ int setseed(int seed);
 int getrand();
 
 struct Stats {
-    int minv;
-    int maxv;
-    int sum;
+    int *minv;
+    int *maxv;
+    int *sum;
 };
 
-void init_stats(struct Stats* s, int x) {
-    s->minv = x;
-    s->maxv = x;
-    s->sum  = x;
-}
-
-void update_stats(struct Stats* s, int x) {
-    if (x < s->minv) {
-        s->minv = x;
-    }
-    if (x > s->maxv) {
-        s->maxv = x;
-    }
-    s->sum = s->sum + x;
-}
 
 int main() {
     int n;
     int i;
     int x;
     struct Stats s;
-    struct Stats* ps;
 
-    ps = &s;
+    int v_min;
+    int v_max;
+    int v_sum;
+
+    s.minv = &v_min;
+    s.maxv = &v_max;
+    s.sum  = &v_sum;
 
     n = readint();
 
@@ -41,17 +31,31 @@ int main() {
     }
 
     x = readint();
-    init_stats(ps, x);
+
+    *s.minv = x;
+    *s.maxv = x;
+    *s.sum  = x;
 
     i = 1;
     while (i < n) {
         x = readint();
-        update_stats(ps, x);
+
+        if (x < *s.minv) {
+            *s.minv = x;
+        }
+        if (x > *s.maxv) {
+            *s.maxv = x;
+        }
+        *s.sum = *s.sum + x;
+
         i = i + 1;
     }
-    writeint(ps->minv);
-    writeint(ps->maxv);
-    writeint(ps->sum);
+
+    writeint(*s.minv);
+    writeint(*s.maxv);
+    writeint(*s.sum);
+    int avg = *s.sum / n;
+    writeint(avg);
 
     return 0;
 }

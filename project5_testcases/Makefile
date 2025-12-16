@@ -4,7 +4,7 @@ CFLAGS  = -Wall -Werror -g
 CRT 	= splc_crt.c
 
 # Modify this to your IDEA output directory.
-IDEA_TARGET	= ../target/production/CS323-Compilers-2025F-Projects
+IDEA_TARGET	= ../../out/production/cs323
 
 # Java Options
 JAVA_BIN 	= java
