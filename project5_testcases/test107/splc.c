@@ -4,7 +4,7 @@ int setseed(int seed);
 int getrand();
 int assert_eq(int where, int given, int expected);
 
-int main() {
+int main0() {
     int seed;
     int n;
     int i;

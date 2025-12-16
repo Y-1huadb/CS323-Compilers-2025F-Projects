@@ -9,9 +9,10 @@ int main0() {
     int b = readint();
     int c = readint();
     if (a - b * c < 0) {
-        a = -a++ * 2;
+        a = -a * 2;
     } else {
-        a = -++a * 2;
+        a = a + 1;
+        a = -a * 2;
     }
     writeint(a);
     return 0;

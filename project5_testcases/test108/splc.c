@@ -11,7 +11,7 @@ struct Stats {
     int avg;
 };
 
-int main() {
+int main0() {
     int n;
     int i;
     int x;
