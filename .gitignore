@@ -11,6 +11,9 @@ project5_testcases/ir
 *.tar.gz
 .myapi.key
 
+gen/
+generated/
+
 target/
 !.mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
